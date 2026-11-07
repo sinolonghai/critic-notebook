@@ -79,13 +79,29 @@ node test/documents.test.mjs   # whole documents end to end
 paragraphs, tables, headings, whole-block deletion, `+`-inserted blocks, author stamps,
 and delimiter injection.
 
-`documents.test.mjs` walks every `.md` under `samples/` and `samples-local/` and checks, per
-document: the cells tile the file with nothing unreachable, every text offset maps exactly,
-reject-all and accept-all reproduce the original and the final byte-for-byte, editing each
-cell in turn round-trips both ways, and no markdown leaks into the output as literal text.
+`documents.test.mjs` checks, per document: the cells tile the file with nothing unreachable,
+every text offset maps exactly, reject-all and accept-all reproduce the original and the final
+byte-for-byte, editing each cell in turn round-trips both ways, and no markdown leaks into the
+output as literal text.
 
-`samples/` holds documents committed to the repo. **`samples-local/` is gitignored** — put
-your own files there and they are checked without being published.
+### The two sample folders
+
+| | |
+| --- | --- |
+| `samples/` | The originals, tracked in git. Never edited by hand. |
+| `samples-local/` | The working copies — what the suite reads, and what you open in the tool. Gitignored. |
+
+Everything you do by hand happens in `samples-local/`, so a document you mangle while testing
+is never the original. Missing working copies are seeded from `samples/` on first run:
+
+```
+node test/documents.test.mjs            # seeds anything missing, then checks
+node test/documents.test.mjs --reset    # restore every working copy from samples/
+```
+
+Deleting one file from `samples-local/` skips that document rather than re-seeding it, and a
+file that exists only in `samples-local/` is checked too and flagged as local-only. To add a
+document permanently, put it in `samples/` and commit.
 
 ## Syntax
 

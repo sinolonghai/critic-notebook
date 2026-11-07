@@ -1,8 +1,14 @@
-/* Runs every .md in samples/ and samples-local/ through the real page and asserts the
-   document-level properties. samples-local/ is gitignored — drop your own files there and
-   they get checked too, without ending up in the repo.
+/* Runs every .md in samples-local/ through the real page and asserts the document-level
+   properties.
 
-   Usage: node test/documents.test.mjs */
+   samples/        pristine documents, tracked in git — the originals
+   samples-local/  the working copies this suite reads, gitignored
+
+   Everything you do by hand happens in samples-local/, so a document you mangle while
+   testing is never the original. Missing working copies are seeded from samples/ on first
+   run; --reset overwrites them all again.
+
+   Usage: node test/documents.test.mjs [--reset] */
 import fs from 'fs';
 import path from 'path';
 
@@ -124,17 +130,43 @@ function checkDocument(file, label){
   ok(leaks.length === 0, 'no raw markdown in the output' + (leaks.length ? ' — ' + leaks.join('; ') : ''));
 }
 
-const dirs = ['samples', 'samples-local'];
-let count = 0;
-for(const dir of dirs){
-  const full = path.join(ROOT, dir);
-  if(!fs.existsSync(full)) continue;
-  for(const name of fs.readdirSync(full).filter(f => /\.(md|markdown)$/i.test(f)).sort()){
-    checkDocument(path.join(full, name), dir + '/' + name);
-    count++;
+const PRISTINE = path.join(ROOT, 'samples');
+const WORKING  = path.join(ROOT, 'samples-local');
+const isMd = f => /\.(md|markdown)$/i.test(f);
+const listMd = dir => fs.existsSync(dir) ? fs.readdirSync(dir).filter(isMd) : [];
+
+/* Copy originals into the working folder. Without force, only fills in what is missing —
+   so deleting one working copy genuinely skips that document instead of resurrecting it. */
+function seed(force){
+  if(!fs.existsSync(PRISTINE)) return [];
+  fs.mkdirSync(WORKING, { recursive: true });
+  const copied = [];
+  for(const name of listMd(PRISTINE)){
+    const dest = path.join(WORKING, name);
+    if(force || !fs.existsSync(dest)){
+      fs.copyFileSync(path.join(PRISTINE, name), dest);
+      copied.push(name);
+    }
   }
+  return copied;
 }
 
-if(!count){ console.log('No sample documents found under samples/ or samples-local/.'); process.exit(0); }
-console.log('\n' + count + ' document(s) — ' + (fails ? fails + ' FAILURE(S)' : 'ALL PASS'));
+const reset = process.argv.includes('--reset');
+let working = listMd(WORKING);
+if(reset || !working.length){
+  const copied = seed(reset);
+  if(copied.length) console.log((reset ? 'Reset' : 'Seeded') + ' samples-local/ from samples/ — ' + copied.join(', '));
+  working = listMd(WORKING);
+}
+
+if(!working.length){
+  console.log('Nothing to check. Put a .md in samples/ and re-run, or drop one straight into samples-local/.');
+  process.exit(0);
+}
+
+for(const name of working.sort()) checkDocument(path.join(WORKING, name), 'samples-local/' + name);
+
+const extra = working.filter(n => !fs.existsSync(path.join(PRISTINE, n)));
+console.log('\n' + working.length + ' document(s) — ' + (fails ? fails + ' FAILURE(S)' : 'ALL PASS'));
+if(extra.length) console.log('(local only, no original in samples/: ' + extra.join(', ') + ')');
 process.exit(fails ? 1 : 0);
