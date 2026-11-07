@@ -66,16 +66,26 @@ The non-obvious consequence, and the thing that took three bugs to learn: **text
 belongs to the original.** A newline placed outside a mark survives a reject, so adding a list
 item or a paragraph has to put its newline *inside* the mark, not beside it.
 
-`test/review.test.mjs` asserts the invariant across CJK and Latin edits, list insertions and
-deletions, multi-line paragraphs, tables, headings, whole-block deletion, and `+`-inserted
-blocks. It runs the real page, not a copy of its logic:
+Two test files assert it. Both run the real page — they extract the script from `index.html`
+and call its live functions, so they cannot drift from the implementation. No dependencies;
+Node 18+ and nothing else.
 
 ```
-node test/review.test.mjs
+node test/review.test.mjs      # unit: the cases that have broken before
+node test/documents.test.mjs   # whole documents end to end
 ```
 
-No dependencies — Node 18+ and nothing else. It shims enough DOM to load the page's script,
-then calls the live functions.
+`review.test.mjs` covers CJK and Latin edits, list insertion and deletion, multi-line
+paragraphs, tables, headings, whole-block deletion, `+`-inserted blocks, author stamps,
+and delimiter injection.
+
+`documents.test.mjs` walks every `.md` under `samples/` and `samples-local/` and checks, per
+document: the cells tile the file with nothing unreachable, every text offset maps exactly,
+reject-all and accept-all reproduce the original and the final byte-for-byte, editing each
+cell in turn round-trips both ways, and no markdown leaks into the output as literal text.
+
+`samples/` holds documents committed to the repo. **`samples-local/` is gitignored** — put
+your own files there and they are checked without being published.
 
 ## Syntax
 

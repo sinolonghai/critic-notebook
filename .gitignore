@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 *.log
+
+# your own documents for testing — checked by test/documents.test.mjs, never committed
+samples-local/

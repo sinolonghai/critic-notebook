@@ -460,7 +460,7 @@ function flat(s){
   s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, function(_,txt,url){
     return '<a href="' + safeHref(url) + '" target="_blank" rel="noopener">' + txt + '</a>';
   });
-  return s.replace(/\n/g, '<br>');
+  return s.replace(/&lt;br\s*\/?&gt;/gi, '<br>').replace(/\n/g, '<br>');
 }
 
 var plainMode = false;   /* inside a block-level mark: no offsets, text is not editable there */
@@ -507,6 +507,12 @@ function inlineOff(s, off){
                inlineOff(m[1], off+i+1) + '</a>';
         i += m[0].length; continue;
       }
+    }
+    /* <br> is the one HTML tag markdown tables need; everything else stays escaped text.
+       It is emitted OUTSIDE any .tx span, like a ** marker, so offsets stay 1:1. */
+    if(c === '<'){
+      m = /^<br\s*\/?>/i.exec(rest);
+      if(m){ flush(); out += '<br>'; i += m[0].length; continue; }
     }
     if(!buf.length) bufOff = off + i;
     buf += c; i++;
@@ -586,9 +592,10 @@ function blocks(L){
       i++; continue;
     }
     if(isTableHead(L, i)){
-      var head2 = tableRow(L[i], 'th'); i += 2;
+      var al = tableAlign(L[i+1].s);
+      var head2 = tableRow(L[i], 'th', al); i += 2;
       var rows = [];
-      while(i < L.length && /\|/.test(L[i].s) && !/^\s*$/.test(L[i].s)){ rows.push(tableRow(L[i], 'td')); i++; }
+      while(i < L.length && /\|/.test(L[i].s) && !/^\s*$/.test(L[i].s)){ rows.push(tableRow(L[i], 'td', al)); i++; }
       out.push('<div class="tw"><table><thead>' + head2 + '</thead><tbody>' + rows.join('') + '</tbody></table></div>');
       continue;
     }
@@ -622,12 +629,22 @@ function blocks(L){
   return out.join('\n');
 }
 
-function tableRow(line, tag){
+function tableAlign(sep){
+  return sep.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(function(c){
+    c = c.trim();
+    if(/^:.*:$/.test(c)) return 'center';
+    if(/:$/.test(c)) return 'right';
+    return '';
+  });
+}
+function tableRow(line, tag, align){
   var raw = line.s, noLead = raw.replace(/^\s*\|/, ''), lead = raw.length - noLead.length;
   var inner = noLead.replace(/\|\s*$/, ''), pos = 0, cells = [];
-  inner.split('|').forEach(function(c){
+  inner.split('|').forEach(function(c, n){
     var t = c.replace(/^\s+/, '');
-    cells.push('<' + tag + '>' + inlineOff(t.replace(/\s+$/, ''), line.o + lead + pos + (c.length - t.length)) + '</' + tag + '>');
+    var a = (align && align[n]) ? ' style="text-align:' + align[n] + '"' : '';
+    cells.push('<' + tag + a + '>' +
+      inlineOff(t.replace(/\s+$/, ''), line.o + lead + pos + (c.length - t.length)) + '</' + tag + '>');
     pos += c.length + 1;
   });
   return '<tr>' + cells.join('') + '</tr>';
