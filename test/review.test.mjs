@@ -216,5 +216,27 @@ setup('Clean sentence.');
 const inj=T.buildBlockSource(T.d.cells[0],'Clean sentence.{--sneaky--}{>>evil<<}','').src;
 ok(T.parse(inj).marks.filter(m=>m.t==='del'||m.t==='com').length===0,'typed delimiters neutralized: '+inj);
 
+// ===== 11. Original / Final hide the suggestion rows and show a rail flag instead =====
+setup(T.SAMPLE);
+const withMarks=T.d.cells.findIndex(c=>T.cellMarks(c).length);
+ok(withMarks>=0,'found a cell carrying suggestions (#'+withMarks+')');
+T.v='markup';
+let hm=T.cellHtml(withMarks);
+ok(/class="mk"/.test(hm),'Marked up: suggestion rows present');
+ok(!/class="flag/.test(hm),'Marked up: no rail flag (rows are right there)');
+for(const v of ['original','final']){
+  T.v=v;
+  const h=T.cellHtml(withMarks);
+  ok(!/class="mk"/.test(h), v+': suggestion rows hidden');
+  ok(/class="flag/.test(h),  v+': rail flag shown');
+  ok(new RegExp('data-flag="'+withMarks+'"').test(h), v+': flag points back at this cell');
+}
+T.v='markup';
+// a cell with only a comment gets the muted flag, not the red one
+setup('Plain text here.{==phrase==}{>>@dana: check this<<} More text.');
+T.v='final';
+ok(/class="flag note-only"/.test(T.cellHtml(0)),'comment-only cell gets the muted flag');
+T.v='markup';
+
 console.log('\n'+(fails?fails+' FAILURE(S)':'ALL PASS'));
 process.exit(fails?1:0);

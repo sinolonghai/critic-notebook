@@ -32,6 +32,16 @@ link. Nothing is uploaded — the file they open is read in their own browser an
 
 ### What you do
 
+The window is three panes: the document list on the left, the notebook in the middle, the
+outline on the right. Either side pane folds away with the buttons at the top left; below
+1180px and 880px they become drawers.
+
+The three view tabs show the document marked up, as the original, or as it would read with
+everything accepted. **Original and Final hide the suggestion rows**, because without the
+inline marks a row saying "comma → period" has nothing to point at. A numbered flag on the
+left rail marks the blocks that were touched; clicking it returns to Marked up and lands on
+that block.
+
 | Action | How |
 | --- | --- |
 | Rewrite a block | Click it, edit the text, click away |
@@ -42,6 +52,8 @@ link. Nothing is uploaded — the file they open is read in their own browser an
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Undo anything | `⌘Z` (80 steps) |
 | Save | `⌘S` |
+| Jump between touched blocks | `↑ prev` / `next ↓` in the outline |
+| Fold a side pane | the two buttons at the top left |
 
 Set a name in the `as` field and your suggestions are attributed with `@name`; each author gets
 a colour. The three view tabs show the document marked up, as the original, or as it would read
