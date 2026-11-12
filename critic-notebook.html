@@ -321,8 +321,11 @@ button,input,textarea{font:inherit;color:inherit}
 .cmpbar .older{background:var(--del-bg);color:var(--del)}
 .cmpbar .newer{background:var(--ins-bg);color:var(--ins)}
 .cmpbar .arrow2{color:var(--ink-faint);font-family:var(--mono);font-size:11px}
-.cmpbar select{flex:0 1 auto;min-width:0;max-width:18rem;border:1px solid var(--rule-strong);
+.cmpbar select{flex:0 1 auto;min-width:0;max-width:16rem;border:1px solid var(--rule-strong);
   border-radius:6px;background:var(--surface);padding:5px 7px;font-size:12px}
+.cmpbar .cmpbrowse{flex:0 0 auto;border:1px solid var(--rule-strong);background:var(--surface);
+  border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.cmpbar .cmpbrowse:hover{border-color:var(--accent);color:var(--accent)}
 .cmpbar .cmpstat{margin-left:auto;font-size:11.5px;color:var(--ink-faint);
   font-variant-numeric:tabular-nums;white-space:nowrap}
 .cmpempty{max-width:47rem;margin:0 auto;padding:22px 0;font-size:13px;color:var(--ink-soft);line-height:1.75}
@@ -482,6 +485,7 @@ button,input,textarea{font:inherit;color:inherit}
 </div>
 
 <input type="file" id="file" accept=".md,.markdown,.mdown,.txt,text/markdown,text/plain" multiple hidden>
+<input type="file" id="cmpfile" accept=".md,.markdown,.mdown,.txt,text/markdown,text/plain" hidden>
 
 <script>
 (function(){
@@ -1354,12 +1358,19 @@ function renderCompare(){
         return '<option value="' + esc(o.key) + '"' +
           (compareWith && compareWith.key === o.key ? ' selected' : '') + '>' + esc(o.label) + '</option>';
       }).join('') +
+      /* a browsed file is not in the folder or open, so it needs its own option to show as
+         the current selection */
+      (compareWith && !opts.some(function(o){ return o.key === compareWith.key; })
+        ? '<option value="' + esc(compareWith.key) + '" selected>' + esc(compareWith.name) + '</option>'
+        : '') +
     '</select>' +
+    '<button type="button" class="cmpbrowse" data-act3="browse" title="Compare against a file anywhere on disk">Browse…</button>' +
     '<span class="cmpstat" id="cmpstat"></span></div>';
 
   if(!compareWith){
     return bar + '<div class="cmpempty">Pick a file above to see what changed between it and ' +
-      '<b>' + esc(cur ? cur.name : 'this document') + '</b>.' +
+      '<b>' + esc(cur ? cur.name : 'this document') + '</b>. The list holds the open documents ' +
+      'and the connected folder; <b>Browse…</b> reaches anything else on disk.' +
       '<br><br>To compare against earlier commits of a file, run ' +
       '<code>node tools/history.mjs &lt;file&gt;</code> in the repo — it writes each version into ' +
       '<code>history/</code>, and they show up in the tree on the left.</div>';
@@ -2081,7 +2092,42 @@ nb.addEventListener('change', function(ev){
   }).catch(function(){ toast('Could not read ' + f.name); });
 });
 
+function browseCompare(){
+  function take(name, text){
+    compareWith = { key: 'browsed:' + name, name: name,
+                    src: text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n') };
+    render();
+  }
+  if(CAN_FS && typeof window.showOpenFilePicker === 'function'){
+    window.showOpenFilePicker(pickerOpts({ types: MD_TYPES, multiple: false })).then(function(hs){
+      var h = hs[0];
+      return h.getFile().then(function(f){
+        return f.text().then(function(t){ take(f.name, t); });
+      });
+    }).catch(function(e){
+      if(e && e.name === 'AbortError') return;
+      document.getElementById('cmpfile').click();
+    });
+    return;
+  }
+  document.getElementById('cmpfile').click();
+}
+document.getElementById('cmpfile').addEventListener('change', function(ev){
+  var f = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!f) return;
+  var r = new FileReader();
+  r.onload = function(){
+    compareWith = { key: 'browsed:' + f.name, name: f.name,
+                    src: String(r.result).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n') };
+    render();
+  };
+  r.readAsText(f);
+});
+
 nb.addEventListener('click', function(ev){
+  var br = ev.target.closest('button[data-act3="browse"]');
+  if(br){ browseCompare(); return; }
   var fold = ev.target.closest('button[data-fold]');
   if(fold){
     var body = nb.querySelector('[data-foldbody="' + fold.dataset.fold + '"]');

@@ -6,7 +6,9 @@
   rendered in the same marks the editor uses. Blocks are aligned by LCS before being diffed, so
   one inserted paragraph does not report the whole file as changed; rewritten blocks are
   recognised by word overlap rather than showing as an unrelated delete and insert; runs of
-  untouched blocks collapse. Read-only for now.
+  untouched blocks collapse. Read-only for now. The other side is chosen from a dropdown of
+  the open documents and the connected folder, or through **Browse…**, which opens a file
+  dialog and so reaches a copy that lives nowhere near the folder you opened.
 - `tools/history.mjs` exports a file's past versions into `history/` for the Compare tab, so
   git history is read by git rather than by a packfile parser in the browser.
 - README gains a **Later** section recording what is planned and what makes each piece hard.

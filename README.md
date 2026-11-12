@@ -157,6 +157,11 @@ in a Chinese paragraph marks two characters.
 The **Compare** tab diffs the open document against another one — a different file, or an
 earlier version of the same file — and shows the result in the same marks the editor uses.
 
+The dropdown is a shortcut, holding the open documents and the files in the connected folder.
+**Browse…** opens a file dialog instead and reaches anything on disk: the copy a colleague
+mailed you, a draft in another project. A browsed file is only the other side of the
+comparison — it is not opened for editing.
+
 Two versions cannot be paired by position: insert one paragraph at the top and every later
 block shifts, so a positional diff reports the whole file as changed. Blocks are aligned first,
 by an LCS over their text, and only the pairs that survived alignment are diffed word by word.
