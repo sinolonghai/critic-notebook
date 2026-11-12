@@ -253,5 +253,39 @@ T.v='final';
 ok(/class="flag note-only"/.test(T.cellHtml(0)),'comment-only cell gets the muted flag');
 T.v='markup';
 
+// ===== 12. editing a comment rewrites only the comment =====
+function noteOf(d, mk){
+  if(mk.t==='com') return mk;
+  const kid=d.marks[mk.id+1];
+  return (kid && kid.t==='com' && kid.attached) ? kid : null;
+}
+function editNote(src, pick, body, label){
+  setup(src);
+  const before={orig:T.resolveRange(0,T.d.src.length,'orig'), prop:T.resolveRange(0,T.d.src.length,'prop')};
+  const host=T.d.marks.filter(m=>!m.attached).find(pick);
+  const com=noteOf(T.d,host);
+  ok(!!com, label+': found the comment');
+  if(!com) return;
+  const repl = body ? '{>>'+(com.who?'@'+com.who+'：':'')+body+'<<}' : '';
+  setup(T.d.src.slice(0,com.start)+repl+T.d.src.slice(com.end));
+  const after={orig:T.resolveRange(0,T.d.src.length,'orig'), prop:T.resolveRange(0,T.d.src.length,'prop')};
+  ok(after.orig===before.orig, label+': original text untouched');
+  ok(after.prop===before.prop, label+': final text untouched');
+  const again=T.d.marks.filter(m=>!m.attached).find(pick);
+  const com2=again?noteOf(T.d,again):null;
+  if(body){
+    ok(!!com2 && com2.body===body, label+': new body stored ('+(com2&&com2.body)+')');
+    ok(!com || !com.who || (com2 && com2.who===com.who), label+': author preserved ('+(com2&&com2.who)+')');
+  } else {
+    ok(!com2, label+': emptied comment is gone');
+  }
+}
+editNote('One {~~old~>new~~}{>>@dana: typo hre<<} two.', m=>m.t==='sub', 'typo here', 'change-note');
+editNote('Three {==phrase==}{>>@erin: unclar<<} four.', m=>m.t==='hil', 'unclear, reword', 'highlight-note');
+editNote('Five.{>>standalone remrk<<} Six.', m=>m.t==='com', 'standalone remark', 'standalone');
+editNote('Five.{>>drop me<<} Six.', m=>m.t==='com', '', 'emptying');
+// an unauthored comment must not sprout an author
+editNote('A {--x--}{>>no author here<<} B', m=>m.t==='del', 'still no author', 'unauthored');
+
 console.log('\n'+(fails?fails+' FAILURE(S)':'ALL PASS'));
 process.exit(fails?1:0);

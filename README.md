@@ -68,6 +68,7 @@ that block.
 | Add a block | `+ new block` in the gap between cells |
 | Delete a block | Click it, clear the text, click away |
 | Comment on a phrase | Select it, type the comment |
+| Edit or delete a comment | Click the comment text; empty it to remove it |
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Undo anything | `⌘Z` (80 steps) |
 | Save | `⌘S` — greyed out when there is nothing to write |

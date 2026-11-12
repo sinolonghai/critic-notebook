@@ -286,8 +286,21 @@ button,input,textarea{font:inherit;color:inherit}
 .mk .txt .now{color:var(--ins)}
 .mk .txt .arrow{color:var(--ink-faint);font-family:var(--mono);font-size:11px;margin:0 5px}
 .mk .txt .quote{color:var(--ink-soft)}
-.mk .note{display:block;margin-top:4px;font-family:var(--ui);font-size:12px;line-height:1.5}
+.mk .note{display:block;margin-top:4px;font-family:var(--ui);font-size:12px;line-height:1.5;
+  text-align:left;border:1px solid transparent;border-radius:5px;margin-left:-4px;padding:1px 4px;
+  cursor:text;background:transparent;color:inherit;width:calc(100% + 8px)}
+.mk .note:hover{border-color:var(--rule-strong);background:var(--paper)}
 .mk .note .by{color:var(--note);font-weight:600;margin-right:4px}
+.mk .note .nobody{color:var(--ink-faint)}
+.mk .note .pen{float:right;margin-left:6px;color:var(--ink-faint);opacity:0;font-size:11px}
+.mk .note:hover .pen{opacity:1}
+.mk.editing{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mk .noteed{display:flex;gap:5px;align-items:center;margin-top:4px}
+.mk .noteed input{flex:1;min-width:0;font-family:var(--ui);font-size:12.5px;padding:5px 8px;
+  border:1px solid var(--rule-strong);border-radius:6px;background:var(--paper)}
+.mk .noteed button{flex:0 0 auto;border:1px solid var(--rule-strong);background:var(--surface);
+  border-radius:6px;padding:4px 9px;font-size:11.5px;cursor:pointer;white-space:nowrap}
+.mk .noteed button:hover{border-color:var(--accent);color:var(--accent)}
 .mk .ops{flex:0 0 auto;display:flex;gap:4px;align-items:center}
 .mk .ops button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:5px;
   width:27px;height:24px;font-size:12px;cursor:pointer;line-height:1;padding:0}
@@ -985,6 +998,8 @@ var view = 'markup';
 var openCell = null, insertAt = null;
 var draft = '', draftBase = '';
 var rowCache = [], localIdx = {}, lit = null;
+var curCell = -1;          /* cell being rendered, so a mark row knows where it lives */
+var noteEdit = null;       /* {cell, mi} while a comment is being edited in place */
 var LABEL = { ins:'Insert', del:'Delete', sub:'Replace', com:'Comment', hil:'Highlight' };
 
 function localOf(mk){
@@ -1022,24 +1037,72 @@ function markHtml(mk){
 function markRow(mk, mi){
   var single = (mk.t === 'com' || mk.t === 'hil');
   var e = function(s){ return esc(s).replace(/\n/g, ' '); };
+  var editing = noteEdit && noteEdit.cell === curCell && noteEdit.mi === mi;
   var txt;
   if(mk.t === 'ins') txt = '<span class="now">' + e(mk.add) + '</span>';
   else if(mk.t === 'del') txt = '<span class="was">' + e(mk.rem) + '</span>';
   else if(mk.t === 'sub') txt = '<span class="was">' + e(mk.rem) + '</span><span class="arrow">→</span><span class="now">' + e(mk.add) + '</span>';
   else if(mk.t === 'hil') txt = '<span class="quote">' + e(mk.body) + '</span>';
-  else txt = e(mk.body);
-  if(mk.note) txt += '<span class="note">' + (mk.who ? '<span class="by">@' + esc(mk.who) + '</span>' : '') + esc(mk.note) + '</span>';
+  else txt = '';
 
-  var who = (mk.who && !mk.note)
+  /* the comment body is editable wherever it shows: on its own row, or as the reason under
+     the change it belongs to */
+  if(editing){
+    txt += '<span class="noteed"><input type="text" id="notebox" autocomplete="off" aria-label="Comment">' +
+      '<button type="button" data-nact="save">Save</button>' +
+      '<button type="button" data-nact="cancel">Cancel</button></span>';
+  } else if(mk.note || mk.t === 'com'){
+    var body = mk.t === 'com' ? (mk.body || '') : mk.note;
+    txt += '<span class="note" data-note="' + mi + '" role="button" tabindex="0" title="Click to edit this comment">' +
+      (mk.who ? '<span class="by">@' + esc(mk.who) + '</span>' : '') +
+      (body ? esc(body) : '<i class="nobody">empty comment</i>') +
+      '<span class="pen" aria-hidden="true">✎</span></span>';
+  }
+
+  var who = (mk.who && !mk.note && mk.t !== 'com')
     ? '<span class="who"><span class="dot" style="background:hsl(' + hueOf(mk.who) + ' 52% 48%)"></span>@' + esc(mk.who) + '</span>' : '';
-  var ops = single
+  var ops = editing ? '' : (single
     ? who + '<button type="button" class="y" data-act="accept" data-mi="' + mi + '" title="Resolve" aria-label="Resolve">✓</button>'
     : who + '<button type="button" class="y" data-act="accept" data-mi="' + mi + '" title="Accept" aria-label="Accept">✓</button>' +
-            '<button type="button" class="n" data-act="reject" data-mi="' + mi + '" title="Reject" aria-label="Reject">✕</button>';
+            '<button type="button" class="n" data-act="reject" data-mi="' + mi + '" title="Reject" aria-label="Reject">✕</button>');
 
-  return '<div class="mk" data-k="' + mk.t + '" data-mi="' + mi + '">' +
+  return '<div class="mk' + (editing ? ' editing' : '') + '" data-k="' + mk.t + '" data-mi="' + mi + '">' +
     '<span class="chip">' + LABEL[mk.t] + '</span><span class="txt">' + txt + '</span>' +
-    '<span class="ops">' + ops + '</span></div>';
+    (ops ? '<span class="ops">' + ops + '</span>' : '') + '</div>';
+}
+
+/* the comment carrying a row's text: the mark itself when it is a comment, otherwise the
+   comment attached just after it */
+function noteMarkOf(mk){
+  if(!mk) return null;
+  if(mk.t === 'com') return mk;
+  var kid = doc.marks[mk.id + 1];
+  return (kid && kid.t === 'com' && kid.attached) ? kid : null;
+}
+function startNoteEdit(cell, mi){
+  var mks = cellMarks(doc.cells[cell]);
+  if(!noteMarkOf(mks[mi])) return;
+  noteEdit = { cell: cell, mi: mi, text: null };
+  render();
+}
+function cancelNoteEdit(){ if(!noteEdit) return; noteEdit = null; render(); }
+function commitNoteEdit(){
+  if(!noteEdit) return;
+  var box = document.getElementById('notebox');
+  var text = box ? box.value : '';
+  var cell = doc.cells[noteEdit.cell];
+  var mks = cell ? cellMarks(cell) : [];
+  var com = noteMarkOf(mks[noteEdit.mi]);
+  noteEdit = null;
+  if(!com){ render(); return; }
+  var body = scrub(text).replace(/\s*\n\s*/g, ' ').trim();
+  if(!body){
+    editSource(com.start, com.end, '');   /* emptied — the comment goes */
+    toast('Comment removed');
+    return;
+  }
+  editSource(com.start, com.end, '{>>' + (com.who ? '@' + com.who + '：' : '') + body + '<<}');
+  toast('Comment updated');
 }
 
 /* ===================== rows ===================== */
@@ -1092,6 +1155,7 @@ function renderSnippet(src){
 function cellBody(idx){
   var cell = doc.cells[idx];
   var mks = cellMarks(cell);
+  curCell = idx;
   localIdx = {};
   mks.forEach(function(m, n){ localIdx[m.id] = n; });
   if(openCell === idx && !cell.locked && view === 'markup') return editorHtml('cell', idx);
@@ -1152,6 +1216,14 @@ function render(){
 }
 
 function mountEditor(){
+  var nb2 = document.getElementById('notebox');
+  if(nb2 && !nb2.dataset.live){
+    nb2.dataset.live = '1';
+    var mks = noteEdit ? cellMarks(doc.cells[noteEdit.cell]) : [];
+    var com = noteEdit ? noteMarkOf(mks[noteEdit.mi]) : null;
+    nb2.value = com ? (com.body || '') : '';
+    nb2.focus(); nb2.select();
+  }
   var box = document.getElementById('edbox');
   if(!box) return;
   if(box.value !== draft) box.value = draft;
@@ -1611,7 +1683,7 @@ function snapshot(){ history.push(doc.src); if(history.length > 80) history.shif
 function commitSource(src){
   snapshot();
   doc = parse(src);
-  lit = null;
+  lit = null; noteEdit = null;
   render();
 }
 function editSource(a, b, repl){ commitSource(doc.src.slice(0, a) + repl + doc.src.slice(b)); }
@@ -1715,6 +1787,7 @@ function flushEditor(){
 /* ===================== events: notebook ===================== */
 nb.addEventListener('mousedown', function(ev){
   if(ev.target.closest('.ed')) return;
+  if(noteEdit && !ev.target.closest('.noteed') && !ev.target.closest('[data-note]')) cancelNoteEdit();
   if(openCell !== null || insertAt !== null) flushEditor();
 }, true);
 document.addEventListener('mousedown', function(ev){
@@ -1743,6 +1816,17 @@ nb.addEventListener('click', function(ev){
     return;
   }
 
+  var nact = ev.target.closest('button[data-nact]');
+  if(nact){
+    if(nact.dataset.nact === 'save') commitNoteEdit(); else cancelNoteEdit();
+    return;
+  }
+  var note = ev.target.closest('[data-note]');
+  if(note){
+    var hn = note.closest('.cell[data-idx]');
+    if(hn){ startNoteEdit(+hn.dataset.idx, +note.dataset.note); return; }
+  }
+  if(ev.target.closest('.noteed')) return;
   var row = ev.target.closest('.mk[data-mi]');
   if(row){
     var h2 = row.closest('.cell[data-idx]');
@@ -1788,6 +1872,16 @@ function schedulePreview(){
   }, 150);
 }
 nb.addEventListener('keydown', function(ev){
+  if(ev.target.id === 'notebox'){
+    if(ev.key === 'Enter'){ ev.preventDefault(); commitNoteEdit(); }
+    if(ev.key === 'Escape'){ ev.preventDefault(); cancelNoteEdit(); }
+    return;
+  }
+  var nk = ev.target.closest && ev.target.closest('[data-note]');
+  if(nk && (ev.key === 'Enter' || ev.key === ' ')){
+    var hk = nk.closest('.cell[data-idx]');
+    if(hk){ ev.preventDefault(); startNoteEdit(+hk.dataset.idx, +nk.dataset.note); return; }
+  }
   if(ev.target.id !== 'edbox') return;
   if(ev.key === 'Escape'){ ev.preventDefault(); discardEditor(); return; }
   if(ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)){ ev.preventDefault(); flushEditor(); }
@@ -1973,7 +2067,9 @@ document.addEventListener('keydown', function(ev){
   if((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z' && !inBox && ev.target.tagName !== 'INPUT'){
     ev.preventDefault(); undo(); return;
   }
-  if(ev.key === 'Escape' && !inBox){ if(pop) hidePop(); else discardEditor(); }
+  if(ev.key === 'Escape' && !inBox){
+    if(pop) hidePop(); else if(noteEdit) cancelNoteEdit(); else discardEditor();
+  }
 });
 
 /* ===================== documents ===================== */
@@ -2036,6 +2132,7 @@ function activate(i){
   doc = parse(r.src);
   savedSrc = r.savedSrc; history = r.history || []; fileHandle = r.handle || null;
   openCell = null; insertAt = null; draft = ''; draftBase = ''; rowCache = []; lit = null;
+  noteEdit = null;
   hidePop();
   pruneSample();
   if(r.path){ expandTo(r.path); saveExpanded(); }
