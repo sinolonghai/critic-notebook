@@ -1,5 +1,7 @@
 import fs from 'fs';
 const PAGE = new URL('../index.html', import.meta.url);
+/* resolved here, before the DOM shims replace global.URL with a blob-download stub */
+const CHANGELOG = new URL('../CHANGELOG.md', import.meta.url);
 let code = fs.readFileSync(PAGE,'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
 code = injectExports(code,
   `globalThis.__t={
@@ -286,6 +288,17 @@ editNote('Five.{>>standalone remrk<<} Six.', m=>m.t==='com', 'standalone remark'
 editNote('Five.{>>drop me<<} Six.', m=>m.t==='com', '', 'emptying');
 // an unauthored comment must not sprout an author
 editNote('A {--x--}{>>no author here<<} B', m=>m.t==='del', 'still no author', 'unauthored');
+
+// ===== 13. the version in the page and in the changelog must agree =====
+{
+  const page = fs.readFileSync(PAGE,"utf8").match(/var VERSION = '([^']+)'/);
+  const chg  = fs.readFileSync(CHANGELOG,'utf8')
+                 .match(/^##\s+([0-9]+\.[0-9]+\.[0-9]+)/m);
+  ok(!!page, 'page declares a VERSION');
+  ok(!!chg,  'changelog has a version heading');
+  ok(page && chg && page[1] === chg[1],
+     'page and changelog agree on the version (' + (page&&page[1]) + ' vs ' + (chg&&chg[1]) + ')');
+}
 
 console.log('\n'+(fails?fails+' FAILURE(S)':'ALL PASS'));
 process.exit(fails?1:0);

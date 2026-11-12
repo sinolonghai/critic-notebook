@@ -1,5 +1,7 @@
 # critic-notebook
 
+**0.1.0** · [changelog](CHANGELOG.md)
+
 Review Markdown the way you'd review a document — but keep the revisions in the file.
 
 A single HTML file. No install, no build, no server, no dependencies. Open it in a browser,
