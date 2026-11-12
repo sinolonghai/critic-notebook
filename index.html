@@ -356,7 +356,7 @@ button,input,textarea{font:inherit;color:inherit}
       <button type="button" id="tog-out" aria-pressed="true" title="Outline pane" aria-label="Toggle outline pane">◨</button>
     </div>
     <div class="brand">
-      <b id="docname">weekly-notes.md</b>
+      <b id="docname">tutorial.md</b>
       <span class="dirty" id="dirty" hidden title="unsaved changes">●</span>
       <span class="meta" id="docmeta"></span>
     </div>
@@ -373,6 +373,7 @@ button,input,textarea{font:inherit;color:inherit}
       <button type="button" class="btn" id="btn-undo" disabled>Undo</button>
       <button type="button" class="btn" id="btn-open">Open</button>
       <button type="button" class="btn" id="btn-paste">Paste</button>
+      <button type="button" class="btn" id="btn-saveas" hidden>Save as…</button>
       <button type="button" class="btn primary" id="btn-save">Save</button>
     </div>
   </div>
@@ -424,35 +425,48 @@ var app = document.getElementById('app');
 
 /* ===================== sample ===================== */
 var SAMPLE = [
-'# Weekly Notes — Week 38',
+'# Tutorial',
 '',
-'We shipped the first cut of the review flow this week{--, and--}{++ and also++} fixed the encoding',
-'bug that showed up on import.',
+'This document is a scratch pad. Nothing here is written to disk — reload the page and it',
+'comes back. Open a folder on the left to work on real files.',
 '',
-'## Shipped',
+'## Editing',
 '',
-'- Review prototype is live, covering {==all five CriticMarkup forms==}{>>@dana: worth spelling out which five?<<}',
-'- BOM handling on `.md` import is fixed',
-'- {++Accept-all and reject-all++}{>>@dana: I added this one, confirm the priority<<}',
+'Click any block to edit its text as plain prose. There is no markup to type: what you',
+'changed is worked out by {~~comparison~>a word-level diff~~}{>>@dana: "diff" is clearer<<} and',
+'recorded as a tracked suggestion. Opening another block commits the one you were in.',
 '',
-'| Metric | Week 37 | Week 38 |',
-'| --- | ---: | ---: |',
-'| Open suggestions | 42 | 17 |',
-'| Median time to resolve | 6.5 min | 2.1 min |',
+'- Click a block, change a word, then click away',
+'- Select a phrase to leave a comment {==on that exact phrase==}{>>@dana: like this one<<}',
+'- {++Hover between two blocks for "+ new block"++}{>>@dana: added while writing this<<}',
+'- Press Esc while editing to throw the edit away',
 '',
-'## Next',
+'## The five marks',
 '',
-'Hand the review link {~~to~>over to~~} outside reviewers and collect a first round of feedback.',
+'| In the file | Means | Shown as |',
+'| --- | --- | --- |',
+'| `{++text++}` | insertion | green, underlined |',
+'| `{--text--}` | deletion | red, struck through |',
+'| `{~~old~>new~~}` | replacement | both, side by side |',
+'| `{>>note<<}` | comment | a ‡ you can click |',
+'| `{==text==}` | highlight | yellow |',
 '',
-'The blocker is {--that we have not decided--}{++an undecided++} permission model, which needs to be',
-'settled at Wednesday\'s review.',
+'> A comment written straight after a change belongs to it, and shows up as its reason.',
+'> Start one with `@name:` and it is attributed to that person.',
+'',
+'## What stays true',
+'',
+'Rejecting every suggestion gives back the original, character for character. Accepting every',
+'one gives the edited text. The original is {--kept--}{++held++} inside the mark, so committing',
+'an edit never destroys it — only accepting does.',
 '',
 '```js',
-'// code blocks are not tracked — marks inside a fence are never parsed',
+'// code blocks are never tracked: marks inside a fence are not parsed',
 'const review = openReview({ track: true });',
 '```',
 '',
-'This paragraph has no suggestions on it. Click it and change a few words to see how an edit gets recorded.'
+'This last paragraph has no suggestions on it. Change a few words here and watch the diff',
+'appear underneath while you type.'
 ].join('\n');
 
 /* ===================== parse ===================== */
@@ -1134,6 +1148,23 @@ function wordCount(s){
   var lat = (s.replace(CJK, ' ').match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) || []).length;
   return cjk + lat;
 }
+/* The textarea's content is not in doc.src until the editor is committed, so a block you are
+   typing in right now still counts as unsaved — otherwise Save greys out mid-edit. */
+function editorPending(){
+  return (openCell !== null || insertAt !== null) && tidy(draft) !== tidy(draftBase);
+}
+function canSave(){
+  var r = docs[activeDoc];
+  if(!r || r.scratch) return false;
+  return isDirty() || editorPending();
+}
+function paintSaveState(){
+  var b = document.getElementById('btn-save'), r = docs[activeDoc];
+  b.disabled = !canSave();
+  b.title = (r && r.scratch) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
+    : !canSave() ? 'No changes to save'
+    : CAN_FS ? 'Write the file (⌘S)' : CAN_DL ? 'Download the .md (⌘S)' : 'Copy the markdown (⌘S)';
+}
 function paintStatus(){
   var open = openCount();
   var label = view === 'original' ? 'original' : view === 'final' ? 'final' : 'current';
@@ -1146,6 +1177,7 @@ function paintStatus(){
   document.getElementById('btn-all-yes').disabled = !open;
   document.getElementById('btn-all-no').disabled = !open;
   document.getElementById('dirty').hidden = !isDirty();
+  paintSaveState();
 }
 function paintLit(){
   nb.querySelectorAll('.lit').forEach(function(e){ e.classList.remove('lit'); });
@@ -1261,7 +1293,7 @@ function walkFolder(dir, prefix, depth, out){
   return chain.then(step);
 }
 
-function useFolder(h){
+function useFolder(h, quiet){
   folder = { handle: h, name: h.name, abs: guessAbs(h.name) };
   pendingFolder = null;
   files = [];
@@ -1278,8 +1310,8 @@ function useFolder(h){
     pruneSample();
     paintDocList();
     scanCounts();
-    toast(list.length ? h.name + ' — ' + list.length + ' markdown file' + (list.length === 1 ? '' : 's')
-                      : 'No markdown files in ' + h.name);
+    if(!quiet) toast(list.length ? h.name + ' — ' + list.length + ' markdown file' + (list.length === 1 ? '' : 's')
+                                 : 'No markdown files in ' + h.name);
   }).catch(function(e){
     toast('Could not read that folder');
   });
@@ -1560,6 +1592,7 @@ nb.addEventListener('input', function(ev){
   if(ev.target.id !== 'edbox') return;
   draft = ev.target.value;
   autosize(ev.target);
+  paintSaveState();
   schedulePreview();
 });
 var prevTimer = null;
@@ -1747,7 +1780,14 @@ authorBox.addEventListener('change', function(){
 
 document.addEventListener('keydown', function(ev){
   var inBox = ev.target.id === 'edbox';
-  if((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's'){ ev.preventDefault(); saveFile(); return; }
+  if((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's'){
+    ev.preventDefault();
+    if(canSave()){ saveFile(); return; }
+    var r = docs[activeDoc];
+    toast(r && r.scratch ? 'The tutorial is a scratch pad — use “Save as” to keep it'
+                         : 'No changes to save');
+    return;
+  }
   if((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z' && !inBox && ev.target.tagName !== 'INPUT'){
     ev.preventDefault(); undo(); return;
   }
@@ -1976,16 +2016,29 @@ function saveFile(){
   copyPanel(text);
   return Promise.resolve(false);
 }
+/* Adopt a handle chosen in a Save-as. If the new file landed inside the connected folder,
+   resolve() gives its path there, so the title and the file list both pick it up. */
+function adoptHandle(h){
+  fileHandle = h;
+  var r = docs[activeDoc];
+  if(!r){ paintTitle(); return Promise.resolve(); }
+  r.name = h.name; r.handle = h; r.label = h.name; r.scratch = false;
+  r.path = ''; r.key = 'loose:' + h.name;
+  if(!folder || !folder.handle.resolve){ paintTitle(); return Promise.resolve(); }
+  return folder.handle.resolve(h).then(function(segs){
+    if(segs){ r.path = segs.join('/'); r.key = r.path; }
+    paintTitle();
+    if(segs) return useFolder(folder.handle, true);
+  }).catch(function(){ paintTitle(); });
+}
 function pickAndSave(text){
   return window.showSaveFilePicker({ suggestedName: suggestName(), types: MD_TYPES })
     .then(function(h){
       return h.createWritable().then(function(w){
         return w.write(text).then(function(){ return w.close(); });
       }).then(function(){
-        fileHandle = h;
-        var r = docs[activeDoc];
-        if(r){ r.name = h.name; r.handle = h; r.label = h.name; }
-        paintTitle();
+        return adoptHandle(h);
+      }).then(function(){
         afterSave(h.name);
         return true;
       });
@@ -1996,6 +2049,14 @@ function pickAndSave(text){
       copyPanel(text);
       return false;
     });
+}
+function saveAs(){
+  flushEditor();
+  var text = exportText();
+  if(CAN_FS) return pickAndSave(text);
+  if(CAN_DL){ downloadText(text); return Promise.resolve(true); }
+  copyPanel(text);
+  return Promise.resolve(false);
 }
 function downloadText(text){
   var blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
@@ -2019,6 +2080,10 @@ document.getElementById('btn-open').title = CAN_DIR
   ? 'Pick a folder; its markdown files are listed on the left'
   : 'This browser cannot open folders — pick files instead';
 document.getElementById('btn-save').addEventListener('click', function(){ saveFile(); });
+var saveAsBtn = document.getElementById('btn-saveas');
+saveAsBtn.hidden = !CAN_FS;
+saveAsBtn.title = 'Write this document to a new file';
+saveAsBtn.addEventListener('click', function(){ saveAs(); });
 document.getElementById('file').addEventListener('change', function(ev){
   var list = Array.prototype.slice.call(ev.target.files || []);
   ev.target.value = '';
@@ -2148,7 +2213,7 @@ function toast(msg){
   document.getElementById('tog-out').setAttribute('aria-pressed', String(out));
 })();
 
-docs.push({ key: 'sample', name: 'weekly-notes.md', path: '', label: 'weekly-notes.md',
+docs.push({ key: 'sample', name: 'tutorial.md', path: '', label: 'tutorial.md', scratch: true,
             src: SAMPLE, savedSrc: SAMPLE, handle: null, history: [], scrollTop: 0 });
 activeDoc = 0;
 paintTitle();

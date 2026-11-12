@@ -60,7 +60,8 @@ that block.
 | Comment on a phrase | Select it, type the comment |
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Undo anything | `⌘Z` (80 steps) |
-| Save | `⌘S` |
+| Save | `⌘S` — greyed out when there is nothing to write |
+| Save to a new file | `Save as…` |
 | Jump between touched blocks | `↑ prev` / `next ↓` in the outline |
 | Fold a side pane | the two buttons at the top left |
 
@@ -139,6 +140,9 @@ Plain CriticMarkup, nothing proprietary:
 A comment immediately following a change is treated as that change's rationale and shown with
 it. A comment beginning `@name:` or `@name：` is attributed to that author — the convention
 MultiMarkdown Composer uses, since CriticMarkup itself has no author field.
+
+The page opens on a built-in tutorial. It is a scratch pad: it has no file behind it, so
+`Save` stays disabled on it and `Save as…` is the way to keep anything you tried there.
 
 ## Known limits
 

@@ -191,9 +191,10 @@ function rowSnapshot(){
   return out;
 }
 const before=rowSnapshot();
-const target=T.d.cells.findIndex(c=>c.kind==='para'&&/no suggestions on it/.test(T.d.src.slice(c.a,c.b)));
+const target=T.d.cells.findIndex(c=>c.kind==='para'&&!T.cellMarks(c).length&&c.b-c.a>60);
 const tc=T.d.cells[target];
-const bb=T.buildBlockSource(tc,T.resolveRange(tc.a,tc.b,'prop').replace('few words','handful of words'),'');
+ok(target>=0,'found an unmarked paragraph to edit (#'+target+')');
+const bb=T.buildBlockSource(tc,T.resolveRange(tc.a,tc.b,'prop').replace(/\ba\b/,'one single'),'');
 setup(T.d.src.slice(0,tc.a)+bb.src+T.d.src.slice(tc.b));
 const after=rowSnapshot();
 ok(before.length===after.length,'cell count unchanged by an in-place edit');
