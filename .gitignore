@@ -4,3 +4,6 @@ node_modules/
 
 # your own documents for testing — checked by test/documents.test.mjs, never committed
 samples-local/
+
+# versions exported by tools/history.mjs for the Compare tab
+history/

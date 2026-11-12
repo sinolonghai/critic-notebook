@@ -142,6 +142,7 @@ that block.
 | Save to a new file | `Save as…` |
 | Jump between touched blocks | `↑ prev` / `next ↓` in the outline |
 | Fold a side pane | the two buttons at the top left |
+| Compare two versions | the **Compare** tab |
 
 Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author
 gets a colour.
@@ -150,6 +151,35 @@ Edits are diffed against the **original**, not against your previous edit, so ch
 sentence five times still produces one clean `{~~old~>new~~}` rather than five nested layers.
 The diff is word-level for Latin scripts and character-level for CJK, so changing two characters
 in a Chinese paragraph marks two characters.
+
+## Comparing two versions
+
+The **Compare** tab diffs the open document against another one — a different file, or an
+earlier version of the same file — and shows the result in the same marks the editor uses.
+
+Two versions cannot be paired by position: insert one paragraph at the top and every later
+block shifts, so a positional diff reports the whole file as changed. Blocks are aligned first,
+by an LCS over their text, and only the pairs that survived alignment are diffed word by word.
+Blocks that were rewritten rather than replaced are recognised by word overlap, so they read as
+one change instead of a deletion next to an unrelated insertion. Runs of untouched blocks
+collapse to a single line.
+
+To compare against git history, export the versions as files first:
+
+```sh
+node tools/history.mjs README.md        # last 10 versions
+node tools/history.mjs docs/spec.md 25
+node tools/history.mjs --all            # every tracked .md
+```
+
+They land in `history/<name>/<date>-<sha>.md`, which is gitignored and shows up in the tree on
+the left like any other folder. Git stays in git's hands: a web page has no business parsing
+packfiles, and a reader that handled only loose objects would work on a fresh repo and quietly
+stop after the first `git gc`.
+
+The view is read-only. Taking individual changes from one version into another is worth doing
+later, and belongs in a new commit rather than a revert — prose is exactly the case where you
+accept one paragraph and reject the next.
 
 ## Browsers and platforms
 

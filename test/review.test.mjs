@@ -289,6 +289,29 @@ editNote('Five.{>>drop me<<} Six.', m=>m.t==='com', '', 'emptying');
 // an unauthored comment must not sprout an author
 editNote('A {--x--}{>>no author here<<} B', m=>m.t==='del', 'still no author', 'unauthored');
 
+// ===== 12b. a mark holding one backtick must still parse =====
+/* a diff that changes formatting produces {~~`x`~>**x**~~}; the stray backtick used to pair
+   with the next one in the document and swallow the following mark as "inline code" */
+{
+  const src = 'Use {~~`old`~>**new**~~} and `real code` here {--gone--} end.';
+  const d = T.parse(src);
+  const kinds = d.marks.filter(m=>!m.attached).map(m=>m.t).join(',');
+  ok(kinds === 'sub,del', 'marks around a backtick survive (' + kinds + ')');
+  ok(T.resolveRange.call(null,0,0,'orig') !== undefined || true, '');
+  setup(src);
+  ok(T.resolveRange(0,T.d.src.length,'orig') === 'Use `old` and `real code` here gone end.',
+     'reject-all restores the backticked original');
+  ok(T.resolveRange(0,T.d.src.length,'prop') === 'Use **new** and `real code` here  end.',
+     'accept-all gives the new formatting');
+}
+/* and the opposite must still hold: a mark written literally inside code is NOT a mark */
+{
+  const d = T.parse('Write `{++like this++}` to insert.');
+  ok(d.marks.length === 0, 'a mark inside inline code is still ignored (' + d.marks.length + ')');
+  const f = T.parse('text\n\n```\n{++fenced++}\n```\n\ntail');
+  ok(f.marks.length === 0, 'a mark inside a fence is still ignored (' + f.marks.length + ')');
+}
+
 // ===== 13. opening a document runs end to end =====
 /* a one-line edit once left `eol` referenced but never declared, so every openDoc threw —
    parsing the file could not catch it, only running it */

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Compare** tab: diff the open document against another file, or an earlier version of it,
+  rendered in the same marks the editor uses. Blocks are aligned by LCS before being diffed, so
+  one inserted paragraph does not report the whole file as changed; rewritten blocks are
+  recognised by word overlap rather than showing as an unrelated delete and insert; runs of
+  untouched blocks collapse. Read-only for now.
+- `tools/history.mjs` exports a file's past versions into `history/` for the Compare tab, so
+  git history is read by git rather than by a packfile parser in the browser.
+- Fixes a parser bug the compare work surfaced, latent in the editor all along: a mark whose
+  text contains one backtick — which a diff produces as soon as formatting changes — left a
+  stray backtick that paired with the next one in the document, and the inline-code span that
+  resulted swallowed the following mark. Code spans and fences are now found on a copy with
+  marks blanked out.
+
 ## 0.1.0 — 2026-11-12
 
 First tagged version. Usable end to end: open a folder, review and edit its markdown,

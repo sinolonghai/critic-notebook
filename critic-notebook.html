@@ -312,6 +312,47 @@ button,input,textarea{font:inherit;color:inherit}
 .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .locknote{font-size:11.5px;color:var(--ink-faint);margin-top:5px}
 
+/* ---------- compare ---------- */
+.cmpbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  max-width:47rem;margin:0 auto 14px;padding:10px 0 11px;background:var(--paper);
+  border-bottom:1px solid var(--rule)}
+.cmpbar .side{font-family:var(--mono);font-size:11.5px;padding:3px 8px;border-radius:5px;max-width:15rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmpbar .older{background:var(--del-bg);color:var(--del)}
+.cmpbar .newer{background:var(--ins-bg);color:var(--ins)}
+.cmpbar .arrow2{color:var(--ink-faint);font-family:var(--mono);font-size:11px}
+.cmpbar select{flex:0 1 auto;min-width:0;max-width:18rem;border:1px solid var(--rule-strong);
+  border-radius:6px;background:var(--surface);padding:5px 7px;font-size:12px}
+.cmpbar .cmpstat{margin-left:auto;font-size:11.5px;color:var(--ink-faint);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.cmpempty{max-width:47rem;margin:0 auto;padding:22px 0;font-size:13px;color:var(--ink-soft);line-height:1.75}
+.cmpempty code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+.cmplist{max-width:47rem;margin:0 auto;display:flex;flex-direction:column;gap:3px}
+
+.cmp{display:grid;grid-template-columns:74px minmax(0,1fr);gap:10px;padding:7px 0;border-radius:8px}
+.cmp .cmptag{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  padding-top:6px;text-align:right;user-select:none}
+.cmp.added .cmptag{color:var(--ins)}
+.cmp.removed .cmptag{color:var(--del)}
+.cmp.changed .cmptag{color:var(--accent)}
+.cmp .cmpbody{min-width:0;font-family:var(--doc);font-size:16px;line-height:1.72}
+.cmp .cmpbody>:first-child{margin-top:0}
+.cmp .cmpbody>:last-child{margin-bottom:0}
+.cmp.same{grid-template-columns:74px minmax(0,1fr)}
+.cmp.same .cmpbody{color:var(--ink-faint)}
+.cmp.changed{background:var(--accent-soft)}
+.cmp.changed,.cmp.added,.cmp.removed{padding:9px 10px;margin:0 -10px}
+
+.cmpfold{width:100%;border:0;border-top:1px dashed var(--rule-strong);background:transparent;
+  color:var(--ink-faint);font-family:var(--mono);font-size:10.5px;padding:9px 0 8px;cursor:pointer;
+  text-align:center;margin:3px 0}
+.cmpfold:hover{color:var(--accent);border-top-color:var(--accent)}
+.cmpfold::before{content:"⌄ "}
+.cmpfold.open::before{content:"⌃ "}
+.out-row .ct.added{color:var(--ins);background:var(--ins-bg)}
+.out-row .ct.removed{color:var(--del);background:var(--del-bg)}
+.out-row .ct.changed{color:var(--accent);background:var(--accent-soft)}
+
 /* ---------- popover / modal / toast ---------- */
 .pop{position:fixed;z-index:50;background:var(--surface);border:1px solid var(--rule-strong);
   border-radius:10px;box-shadow:var(--pop-shadow);padding:8px;width:max-content;max-width:min(320px,calc(100vw - 16px))}
@@ -389,6 +430,7 @@ button,input,textarea{font:inherit;color:inherit}
       <button type="button" data-view="markup" aria-pressed="true">Marked up</button>
       <button type="button" data-view="original" aria-pressed="false">Original</button>
       <button type="button" data-view="final" aria-pressed="false">Final</button>
+      <button type="button" data-view="compare" aria-pressed="false">Compare</button>
     </div>
     <div class="whoami">
       <label for="author" title="Your suggestions are attributed to this name">Sign as</label>
@@ -507,12 +549,22 @@ var PH = '\u0001';
 var MARK_RE = /\{\+\+([\s\S]*?)\+\+\}|\{--([\s\S]*?)--\}|\{~~([\s\S]*?)~>([\s\S]*?)~~\}|\{>>([\s\S]*?)<<\}|\{==([\s\S]*?)==\}/g;
 var DANGER_RE = /\{\+\+|\+\+\}|\{--|--\}|\{~~|~~\}|~>|\{>>|<<\}|\{==|==\}/g;
 
+/* Code spans and fences are found on a copy with every mark blanked out to spaces of the
+   same length, so offsets still line up.
+
+   Without that, a mark whose text contains one backtick — {~~`name`~>**name**~~}, which a diff
+   produces the moment formatting changes — leaves a stray backtick that pairs with the next
+   one in the document. The span that results straddles the following mark's opener, the mark
+   is treated as code, and it silently disappears. A literal `{++x++}` written as code still
+   works: blanking leaves its surrounding backticks adjacent, so the span still covers it. */
 function protectedRanges(src){
+  MARK_RE.lastIndex = 0;
+  var mask = src.replace(MARK_RE, function(m){ return m.replace(/[^\n]/g, ' '); });
   var r = [], m;
   var fence = /^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[^\n]*$/gm;
-  while((m = fence.exec(src))) r.push([m.index, m.index + m[0].length]);
+  while((m = fence.exec(mask))) r.push([m.index, m.index + m[0].length]);
   var code = /`[^`\n]*`/g;
-  while((m = code.exec(src))){
+  while((m = code.exec(mask))){
     var inside = r.some(function(x){ return m.index >= x[0] && m.index < x[1]; });
     if(!inside) r.push([m.index, m.index + m[0].length]);
   }
@@ -996,6 +1048,81 @@ function buildBlockSource(cell, newText, stamp){
   return { src: opsToSource(diffTokens(tokenize(base), tokenize(want)), stamp || ''), changed: true, base: base };
 }
 
+/* ===================== compare ===================== */
+/* Two versions of a document cannot be paired by position: insert one paragraph at the top
+   and every later block shifts, so a positional diff calls the whole file changed. Blocks are
+   aligned first — an LCS over their normalised text — and only the pairs that survived
+   alignment are diffed word by word. */
+var compareWith = null;   /* {key, name, src} — the OTHER version, read as the older side */
+
+function docBlocks(src){
+  var saved = doc;
+  try{
+    doc = parse(src); buildWorking(); segment();
+    return doc.cells.map(function(c){
+      return { text: resolveRange(c.a, c.b, 'prop'), kind: c.kind };
+    }).filter(function(b){ return b.text.replace(/\s/g, ''); });
+  } finally {
+    doc = saved;
+    if(doc){ buildWorking(); segment(); }
+  }
+}
+function normBlock(t){ return t.replace(/\s+/g, ' ').trim(); }
+
+/* Dice overlap: close enough counts as the same block rewritten, rather than one removed
+   and an unrelated one added. Only tokens with a letter, digit or CJK character count —
+   counting punctuation and spaces makes "## Why" and "## Using it" look 80% alike, because
+   two hashes and a space are most of a short heading. */
+var WORDY = /[A-Za-z0-9\u00c0-\u024f\u0370-\u1fff\u2c00-\ud7ff]/;
+function contentTokens(t){
+  return tokenize(t).filter(function(x){ return WORDY.test(x); });
+}
+function similarity(a, b){
+  var A = contentTokens(a), B = contentTokens(b);
+  if(!A.length && !B.length) return normBlock(a) === normBlock(b) ? 1 : 0;
+  if(!A.length || !B.length) return 0;
+  var bag = {}, hit = 0;
+  A.forEach(function(t){ bag[t] = (bag[t] || 0) + 1; });
+  B.forEach(function(t){ if(bag[t] > 0){ bag[t]--; hit++; } });
+  return (2 * hit) / (A.length + B.length);
+}
+var PAIR_AT = 0.4;
+
+function alignBlocks(oldB, newB){
+  var ops = diffTokens(oldB.map(function(b){ return normBlock(b.text); }),
+                       newB.map(function(b){ return normBlock(b.text); }));
+  var out = [], oi = 0, ni = 0, i = 0;
+  while(i < ops.length){
+    if(ops[i][0] === '='){ out.push({ t:'same', a: oldB[oi++], b: newB[ni++] }); i++; continue; }
+    var dels = [], inss = [];
+    while(i < ops.length && ops[i][0] !== '='){
+      if(ops[i][0] === '-') dels.push(oldB[oi++]); else inss.push(newB[ni++]);
+      i++;
+    }
+    /* inside one run, pair the blocks that are recognisably the same text rewritten */
+    var usedIns = {};
+    dels.forEach(function(d){
+      var best = -1, score = PAIR_AT;
+      inss.forEach(function(n, k){
+        if(usedIns[k]) return;
+        var sc = similarity(d.text, n.text);
+        if(sc > score){ score = sc; best = k; }
+      });
+      if(best >= 0){ usedIns[best] = 1; out.push({ t:'changed', a: d, b: inss[best] }); }
+      else out.push({ t:'removed', a: d });
+    });
+    inss.forEach(function(n, k){ if(!usedIns[k]) out.push({ t:'added', b: n }); });
+  }
+  return out;
+}
+
+function compareRows(){
+  if(!compareWith) return null;
+  var older = docBlocks(compareWith.src);
+  var newer = docBlocks(doc.src);
+  return alignBlocks(older, newer);
+}
+
 /* ===================== state ===================== */
 var docs = [];            /* [{name, label, src, savedSrc, handle, history, scrollTop}] */
 var activeDoc = -1;
@@ -1008,6 +1135,7 @@ var openCell = null, insertAt = null;
 var draft = '', draftBase = '';
 var rowCache = [], localIdx = {}, lit = null;
 var curCell = -1;          /* cell being rendered, so a mark row knows where it lives */
+var compareRowsCache = [];
 var noteEdit = null;       /* {cell, mi} while a comment is being edited in place */
 var LABEL = { ins:'Insert', del:'Delete', sub:'Replace', com:'Comment', hil:'Highlight' };
 
@@ -1193,12 +1321,115 @@ function cellHtml(idx){
     '<div class="body">' + cellBody(idx) + '</div></div>';
 }
 
+function compareOptions(){
+  var opts = [], seen = {};
+  docs.forEach(function(r, i){
+    if(i === activeDoc) return;
+    seen[r.key] = 1;
+    opts.push({ key: r.key, label: r.name + (r.path ? ' — ' + r.path : '') });
+  });
+  files.forEach(function(f){
+    if(seen[f.key]) return;
+    var cur = docs[activeDoc];
+    if(cur && cur.key === f.key) return;
+    opts.push({ key: f.key, label: f.path });
+  });
+  return opts;
+}
+
+function sameRow(r){
+  return '<div class="cmp same"><div class="cmptag"></div><div class="cmpbody">' +
+    renderPlain(r.b.text) + '</div></div>';
+}
+function renderCompare(){
+  var cur = docs[activeDoc];
+  var opts = compareOptions();
+  var bar = '<div class="cmpbar">' +
+    '<span class="side older">' + (compareWith ? esc(compareWith.name) : 'older version') + '</span>' +
+    '<span class="arrow2">→</span>' +
+    '<span class="side newer">' + esc(cur ? cur.name : '') + '</span>' +
+    '<select id="cmppick" aria-label="Compare against">' +
+      '<option value="">compare against…</option>' +
+      opts.map(function(o){
+        return '<option value="' + esc(o.key) + '"' +
+          (compareWith && compareWith.key === o.key ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+      }).join('') +
+    '</select>' +
+    '<span class="cmpstat" id="cmpstat"></span></div>';
+
+  if(!compareWith){
+    return bar + '<div class="cmpempty">Pick a file above to see what changed between it and ' +
+      '<b>' + esc(cur ? cur.name : 'this document') + '</b>.' +
+      '<br><br>To compare against earlier commits of a file, run ' +
+      '<code>node tools/history.mjs &lt;file&gt;</code> in the repo — it writes each version into ' +
+      '<code>history/</code>, and they show up in the tree on the left.</div>';
+  }
+
+  var rows = compareRows();
+  compareRowsCache = rows;
+  var n = { added:0, removed:0, changed:0, same:0 };
+  rows.forEach(function(r){ n[r.t]++; });
+
+  var html = '', run = [], idx = 0;
+  function flushRun(){
+    if(!run.length) return;
+    if(run.length <= 2){
+      run.forEach(function(r){
+        html += sameRow(r);
+      });
+    } else {
+      html += '<button type="button" class="cmpfold" data-fold="' + idx + '">' +
+        run.length + ' unchanged blocks</button>';
+      html += '<div class="cmpfolded" data-foldbody="' + idx + '" hidden>' +
+        run.map(sameRow).join('') + '</div>';
+      idx++;
+    }
+    run = [];
+  }
+
+  rows.forEach(function(r, i){
+    if(r.t === 'same'){ run.push(r); return; }
+    flushRun();
+    var tag = r.t === 'added' ? 'added' : r.t === 'removed' ? 'removed' : 'changed';
+    html += '<div class="cmp ' + tag + '" data-chg="' + i + '" id="chg' + i + '">' +
+      '<div class="cmptag">' + tag + '</div><div class="cmpbody">';
+    if(r.t === 'added') html += '<div class="blk ins">' + renderPlain(r.b.text) + '</div>';
+    else if(r.t === 'removed') html += '<div class="blk del">' + renderPlain(r.a.text) + '</div>';
+    else {
+      /* the same word diff the editor records, rendered the same way */
+      var marked = opsToSource(diffTokens(tokenize(r.a.text), tokenize(r.b.text)), '');
+      html += '<div class="cmpinline">' + renderSnippet(marked) + '</div>';
+    }
+    html += '</div></div>';
+  });
+  flushRun();
+
+  var stat = [];
+  if(n.changed) stat.push(n.changed + ' changed');
+  if(n.added) stat.push(n.added + ' added');
+  if(n.removed) stat.push(n.removed + ' removed');
+  stat.push(n.same + ' unchanged');
+  bar = bar.replace('<span class="cmpstat" id="cmpstat"></span>',
+    '<span class="cmpstat">' + stat.join(' · ') + '</span>');
+
+  if(!n.changed && !n.added && !n.removed){
+    html = '<div class="cmpempty">These two versions say the same thing.</div>';
+  }
+  return bar + '<div class="cmplist">' + html + '</div>';
+}
+
 /* Rows are position-independent: cell HTML uses cell-relative offsets and cell-local mark
    indices, so an untouched cell renders byte-identical and its DOM node is never replaced —
    which is what lets a click on another cell survive the commit it triggers. */
 function render(){
   buildWorking();
   segment();
+  if(view === 'compare'){
+    nb.innerHTML = renderCompare();
+    rowCache = [];
+    paintStatus(); paintOutline(); paintDocList();
+    return;
+  }
   var n = doc.cells.length;
   if(openCell !== null && openCell >= n) openCell = null;
   if(insertAt !== null && insertAt > n) insertAt = null;
@@ -1277,8 +1508,8 @@ function paintStatus(){
     ' · ' + wordCount(body) + ' words ' + label;
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
   document.getElementById('btn-undo').disabled = history.length === 0;
-  document.getElementById('btn-all-yes').disabled = !open;
-  document.getElementById('btn-all-no').disabled = !open;
+  document.getElementById('btn-all-yes').disabled = !open || view === 'compare';
+  document.getElementById('btn-all-no').disabled = !open || view === 'compare';
   document.getElementById('dirty').hidden = !isDirty();
   paintSaveState();
 }
@@ -1302,6 +1533,25 @@ function headingCells(){
   return out;
 }
 function paintOutline(){
+  if(view === 'compare'){
+    var host0 = document.getElementById('outlist');
+    var rows = compareRowsCache || [];
+    var chg = [];
+    rows.forEach(function(r, i){ if(r.t !== 'same') chg.push({ i: i, t: r.t, text: (r.b || r.a).text }); });
+    document.getElementById('out-ct').textContent = chg.length || '';
+    host0.innerHTML = !compareWith
+      ? '<div class="pane-empty">Pick a file to compare against.</div>'
+      : (chg.length
+          ? chg.map(function(c){
+              return '<button type="button" class="out-row l1" data-jump="chg' + c.i + '">' +
+                '<span class="ct ' + c.t + '">' + c.t.charAt(0).toUpperCase() + '</span>' +
+                '<span class="t">' + esc(bare(c.text).slice(0, 60) || '(empty)') + '</span></button>';
+            }).join('')
+          : '<div class="pane-empty">No differences.</div>');
+    var jn0 = document.getElementById('jump-next'), jp0 = document.getElementById('jump-prev');
+    jn0.disabled = jp0.disabled = true;
+    return;
+  }
   var hs = headingCells();
   document.getElementById('out-ct').textContent = hs.length ? hs.length : '';
   var host = document.getElementById('outlist');
@@ -1738,6 +1988,7 @@ function resolveAll(v){
 
 /* ===================== editing ===================== */
 function openEditor(idx){
+  if(view === 'compare') return;
   if(view !== 'markup'){ toast('Switch to “Marked up” to edit'); return; }
   var cell = doc.cells[idx];
   if(!cell || cell.locked) return;
@@ -1811,7 +2062,32 @@ document.addEventListener('mousedown', function(ev){
   if(openCell !== null || insertAt !== null) flushEditor();
 });
 
+nb.addEventListener('change', function(ev){
+  if(ev.target.id !== 'cmppick') return;
+  var key = ev.target.value;
+  if(!key){ compareWith = null; render(); return; }
+  var i = findDoc(key);
+  if(i >= 0){
+    compareWith = { key: key, name: docs[i].name, src: i === activeDoc ? doc.src : docs[i].src };
+    render();
+    return;
+  }
+  var f = null;
+  files.forEach(function(x){ if(x.key === key) f = x; });
+  if(!f) return;
+  f.handle.getFile().then(function(file){ return file.text(); }).then(function(t){
+    compareWith = { key: key, name: f.name, src: t.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n') };
+    render();
+  }).catch(function(){ toast('Could not read ' + f.name); });
+});
+
 nb.addEventListener('click', function(ev){
+  var fold = ev.target.closest('button[data-fold]');
+  if(fold){
+    var body = nb.querySelector('[data-foldbody="' + fold.dataset.fold + '"]');
+    if(body){ body.hidden = !body.hidden; fold.classList.toggle('open', !body.hidden); }
+    return;
+  }
   var fl = ev.target.closest('button[data-flag]');
   if(fl){ showMarkedUp(+fl.dataset.flag); return; }
 
@@ -2037,6 +2313,7 @@ function setView(name){
   });
   hidePop(); lit = null;
   document.getElementById('lead').hidden = view !== 'markup';
+  if(view !== 'compare') compareRowsCache = [];
   rowCache = [];
   render();
 }
@@ -2061,6 +2338,12 @@ document.getElementById('tog-side').addEventListener('click', function(){ toggle
 document.getElementById('tog-out').addEventListener('click', function(){ togglePane('out'); });
 
 document.getElementById('outlist').addEventListener('click', function(ev){
+  var j = ev.target.closest('button[data-jump]');
+  if(j){
+    var el = document.getElementById(j.dataset.jump);
+    if(el) center.scrollTo({ top: Math.max(0, el.offsetTop - 70), behavior: 'smooth' });
+    return;
+  }
   var r = ev.target.closest('button[data-goto]');
   if(r) scrollToCell(+r.dataset.goto, false);
 });
