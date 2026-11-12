@@ -23,9 +23,18 @@ edits text normally, and produces correct markup.
 
 ## Using it
 
-**Locally.** Download `index.html` and open it. In Chromium-based browsers, `Open` gives you a
-real file handle, so `⌘S` / `Ctrl+S` writes back to the file you opened. Elsewhere it falls
-back to downloading a copy.
+**Locally.** Download `index.html` and open it. In Chromium-based browsers, **Open folder**
+picks a folder once; every markdown file under it is listed in the left pane, and clicking one
+opens it. `⌘S` / `Ctrl+S` writes back to that file in place. The folder is remembered across
+reloads — on return the pane offers it, and one click re-grants permission.
+
+Browsers never reveal a file's absolute path. But when the tool is opened as a local file and
+the folder you picked is the one the tool sits in, the page's own location supplies the prefix,
+so the title bar shows a real path. Any other folder shows the path relative to it rather than
+guessing wrong.
+
+Outside Chromium there is no folder picker: **Open files** and drag & drop still work, and
+saving falls back to downloading a copy.
 
 **From a URL.** Serve `index.html` anywhere static (GitHub Pages works) and send people the
 link. Nothing is uploaded — the file they open is read in their own browser and never leaves it.

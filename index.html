@@ -119,15 +119,31 @@ button,input,textarea{font:inherit;color:inherit}
 
 /* document list */
 .doc-row{display:flex;align-items:center;gap:7px;width:100%;text-align:left;border:1px solid transparent;
-  background:transparent;border-radius:7px;padding:7px 8px;cursor:pointer;min-width:0}
+  background:transparent;border-radius:7px;padding:6px 8px;cursor:pointer;min-width:0}
 .doc-row:hover{background:var(--surface-2)}
 .doc-row[aria-current="true"]{background:var(--accent-soft);border-color:var(--accent)}
 .doc-row .nm{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doc-row[aria-current="true"] .nm{font-weight:500}
-.doc-row .sub{display:block;font-size:10.5px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doc-row .badge{flex:0 0 auto;font-family:var(--mono);font-size:10px;background:var(--note-bg);color:var(--note);
   border-radius:4px;padding:1px 5px;font-weight:600}
 .doc-row .udot{flex:0 0 auto;color:var(--note);font-size:14px;line-height:1}
+.doc-row.pend .nm{opacity:.55}
+
+.grp{font-family:var(--mono);font-size:10px;color:var(--ink-faint);padding:9px 8px 3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp:first-child{padding-top:2px}
+.folder-bar{display:flex;align-items:center;gap:6px;padding:7px 8px;border-bottom:1px solid var(--rule);
+  margin:-7px -7px 5px;background:var(--surface-2)}
+.folder-bar .fn{flex:1;min-width:0;font-size:12px;font-weight:600;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.folder-bar button{flex:0 0 auto;border:1px solid var(--rule-strong);background:var(--surface);
+  border-radius:5px;width:24px;height:22px;padding:0;cursor:pointer;font-size:11px;line-height:1;color:var(--ink-faint)}
+.folder-bar button:hover{border-color:var(--accent);color:var(--accent)}
+.pane-cta{display:block;width:100%;border:1px dashed var(--rule-strong);background:transparent;
+  border-radius:8px;padding:11px 10px;cursor:pointer;font-size:12.5px;color:var(--ink-soft);text-align:center}
+.pane-cta:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
+.pane-cta b{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
+.pane-cta:hover b{color:var(--accent)}
 
 /* outline */
 .out-row{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;
@@ -1209,31 +1225,174 @@ function jumpSuggestion(dir){
   scrollToCell(list[next], true);
 }
 
-/* ===================== document list ===================== */
-function paintDocList(){
-  var host = document.getElementById('doclist');
-  document.getElementById('doc-ct').textContent = docs.length ? docs.length : '';
-  if(!docs.length){
-    host.innerHTML = '<div class="pane-empty">Nothing opened yet. The sample document is loaded; use <b>Open</b> to load your own.</div>';
-  } else {
-    host.innerHTML = docs.map(function(r, i){
-      var active = i === activeDoc;
-      var src = active ? doc.src : r.src;
-      var dirtyNow = active ? isDirty() : (r.src !== r.savedSrc);
-      var cnt = (src.match(MARK_RE_COUNT) || []).length;
-      return '<button type="button" class="doc-row" data-doc="' + i + '" aria-current="' + active + '">' +
-        '<span class="nm">' + esc(r.name) +
-          (r.sub ? '<span class="sub">' + esc(r.sub) + '</span>' : '') + '</span>' +
-        (cnt ? '<span class="badge">' + cnt + '</span>' : '') +
-        (dirtyNow ? '<span class="udot" title="unsaved">●</span>' : '') + '</button>';
-    }).join('');
-  }
-  document.getElementById('side-foot').innerHTML =
-    CAN_FS ? 'Opened this session. Remembering them across reloads is the next step.'
-           : 'Opened this session only — this browser cannot keep file handles.';
-}
+/* ===================== folder ===================== */
 /* cheap top-level suggestion count for the list, without parsing each document */
 var MARK_RE_COUNT = /\{\+\+[\s\S]*?\+\+\}|\{--[\s\S]*?--\}|\{~~[\s\S]*?~~\}|\{==[\s\S]*?==\}/g;
+var MD_FILE = /\.(md|markdown|mdown)$/i;
+var SKIP_DIR = { 'node_modules':1, 'dist':1, 'build':1, '.git':1 };
+
+var folder = null;        /* {handle, name, abs} once connected */
+var pendingFolder = null; /* remembered handle still waiting for permission */
+var files = [];           /* [{key, path, name, dir, handle, count, scanned}] */
+
+/* The page can never learn a file's absolute path. But when the tool itself is opened as a
+   local file and the folder you picked is the folder the tool sits in, the page's own
+   location gives the prefix — so the title can show a real path instead of a relative one.
+   Any other folder falls back to the relative path rather than guessing wrong. */
+function guessAbs(folderName){
+  if(location.protocol !== 'file:') return null;
+  var p = decodeURIComponent(location.pathname).replace(/\/[^\/]*$/, '');
+  return p.replace(/^.*\//, '') === folderName ? p : null;
+}
+
+function walkFolder(dir, prefix, depth, out){
+  if(depth > 6) return Promise.resolve(out);
+  var it = dir.entries(), chain = Promise.resolve();
+  function step(){
+    return it.next().then(function(res){
+      if(res.done) return out;
+      var name = res.value[0], entry = res.value[1];
+      if(name.charAt(0) === '.' || SKIP_DIR[name]) return step();
+      if(entry.kind === 'directory') return walkFolder(entry, prefix + name + '/', depth + 1, out).then(step);
+      if(MD_FILE.test(name)) out.push({ key: prefix + name, path: prefix + name, name: name, dir: prefix, handle: entry });
+      return step();
+    });
+  }
+  return chain.then(step);
+}
+
+function useFolder(h){
+  folder = { handle: h, name: h.name, abs: guessAbs(h.name) };
+  pendingFolder = null;
+  files = [];
+  paintDocList();
+  return walkFolder(h, '', 0, []).then(function(list){
+    /* sort by path segments: plain string order puts "samples-local/" before "samples/",
+       because '-' sorts below '/'. Swapping the separator for NUL restores tree order. */
+    function k(d){ return d.replace(/\//g, '\u0000'); }
+    list.sort(function(a, b){
+      if(a.dir !== b.dir) return k(a.dir) < k(b.dir) ? -1 : 1;
+      return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+    });
+    files = list;
+    pruneSample();
+    paintDocList();
+    scanCounts();
+    toast(list.length ? h.name + ' — ' + list.length + ' markdown file' + (list.length === 1 ? '' : 's')
+                      : 'No markdown files in ' + h.name);
+  }).catch(function(e){
+    toast('Could not read that folder');
+  });
+}
+
+/* fill in per-file suggestion counts in the background, with a budget so a big folder
+   cannot stall the pane */
+function scanCounts(){
+  var budget = 5 * 1024 * 1024, done = 0, batch = files.slice(0, 300);
+  var chain = Promise.resolve();
+  batch.forEach(function(f){
+    chain = chain.then(function(){
+      if(f.scanned || budget <= 0) return;
+      return f.handle.getFile().then(function(file){
+        if(file.size > 1024 * 1024){ f.scanned = true; return; }
+        budget -= file.size;
+        return file.text().then(function(t){
+          f.count = (t.match(MARK_RE_COUNT) || []).length;
+          f.scanned = true;
+          if(++done % 10 === 0) paintDocList();
+        });
+      }).catch(function(){ f.scanned = true; });
+    });
+  });
+  chain.then(paintDocList);
+}
+
+function pickFolder(){
+  return window.showDirectoryPicker({ mode: 'readwrite' }).then(function(h){
+    idbSet('dir', h);
+    return useFolder(h);
+  }).catch(function(e){
+    if(!e || e.name !== 'AbortError') toast('Could not open that folder');
+  });
+}
+function reconnectFolder(){
+  if(!pendingFolder) return;
+  var h = pendingFolder;
+  h.requestPermission({ mode: 'readwrite' }).then(function(p){
+    if(p === 'granted') useFolder(h);
+    else toast('Permission declined');
+  }).catch(function(){ toast('Could not reconnect — pick the folder again'); });
+}
+
+/* ===================== document list ===================== */
+function fileCount(f){
+  var i = findDoc(f.key);
+  if(i < 0) return f.scanned ? f.count : null;
+  var src = i === activeDoc ? doc.src : docs[i].src;
+  return (src.match(MARK_RE_COUNT) || []).length;
+}
+function fileDirty(f){
+  var i = findDoc(f.key);
+  if(i < 0) return false;
+  return i === activeDoc ? isDirty() : docs[i].src !== docs[i].savedSrc;
+}
+function rowHtml(label, key, cnt, dirtyNow, isActive, pend){
+  return '<button type="button" class="doc-row' + (pend ? ' pend' : '') + '" data-key="' + esc(key) + '" aria-current="' + isActive + '">' +
+    '<span class="nm">' + esc(label) + '</span>' +
+    (cnt ? '<span class="badge">' + cnt + '</span>' : '') +
+    (dirtyNow ? '<span class="udot" title="unsaved">●</span>' : '') + '</button>';
+}
+
+function paintDocList(){
+  var host = document.getElementById('doclist');
+  var loose = docs.filter(function(r){ return !r.path; });
+  var html = '';
+
+  if(folder){
+    html += '<div class="folder-bar"><span class="fn" title="' + esc(folder.abs || folder.name) + '">' +
+      esc(folder.name) + '</span>' +
+      '<button type="button" data-act2="refresh" title="Rescan the folder" aria-label="Rescan">⟳</button>' +
+      '<button type="button" data-act2="pick" title="Open a different folder" aria-label="Open another folder">…</button></div>';
+    if(!files.length){
+      html += '<div class="pane-empty">No markdown files found in this folder.</div>';
+    } else {
+      var lastDir = null;
+      files.forEach(function(f){
+        if(f.dir !== lastDir){
+          lastDir = f.dir;
+          html += '<div class="grp" title="' + esc(f.dir || folder.name) + '">' +
+            esc(f.dir ? shortPath(f.dir.replace(/\/$/, ''), 26) : './') + '</div>';
+        }
+        var i = findDoc(f.key);
+        html += rowHtml(f.name, f.key, fileCount(f), fileDirty(f), i >= 0 && i === activeDoc, false);
+      });
+    }
+  } else if(pendingFolder){
+    html += '<button type="button" class="pane-cta" data-act2="reconnect">' +
+      '<b>' + esc(pendingFolder.name) + '</b>Click to reconnect this folder</button>';
+  } else if(CAN_DIR){
+    html += '<button type="button" class="pane-cta" data-act2="pick"><b>Open a folder</b>' +
+      'Its markdown files are listed here</button>';
+  }
+
+  if(loose.length){
+    html += '<div class="grp">' + (folder ? 'not in folder' : 'open') + '</div>';
+    loose.forEach(function(r){
+      var i = findDoc(r.key);
+      var src = i === activeDoc ? doc.src : r.src;
+      html += rowHtml(r.name, r.key, (src.match(MARK_RE_COUNT) || []).length,
+        i === activeDoc ? isDirty() : r.src !== r.savedSrc, i === activeDoc, false);
+    });
+  }
+  if(!html) html = '<div class="pane-empty">Nothing open.</div>';
+  host.innerHTML = html;
+  document.getElementById('doc-ct').textContent = folder ? (files.length || '') : (docs.length || '');
+
+  document.getElementById('side-foot').innerHTML =
+    !CAN_DIR ? 'This browser cannot open folders — use drag &amp; drop, or Chrome for folder mode.'
+    : folder ? 'Click a file to open it. The folder is remembered across reloads.'
+    : 'Pick a folder once; it is remembered across reloads.';
+}
 
 /* ===================== source edits ===================== */
 function snapshot(){ history.push(doc.src); if(history.length > 80) history.shift(); }
@@ -1596,11 +1755,45 @@ document.addEventListener('keydown', function(ev){
 });
 
 /* ===================== documents ===================== */
+function findDoc(key){ for(var i = 0; i < docs.length; i++) if(docs[i].key === key) return i; return -1; }
+/* once a real file is open, the untouched sample is just noise in the list */
+function pruneSample(){
+  if(!folder) return;
+  var s = findDoc('sample');
+  if(s < 0 || s === activeDoc) return;
+  if(docs[s].src !== docs[s].savedSrc) return;
+  docs.splice(s, 1);
+  if(activeDoc > s) activeDoc--;
+}
 function syncRecord(){
   var r = docs[activeDoc];
   if(!r) return;
   r.src = doc.src; r.savedSrc = savedSrc; r.history = history;
   r.handle = fileHandle; r.scrollTop = center.scrollTop;
+}
+/* keep the filename visible: a long path is trimmed from the left, never the right */
+function shortPath(p, max){
+  if(p.length <= max) return p;
+  var parts = p.split('/'), out = parts.pop();
+  while(parts.length){
+    var next = parts.pop() + '/' + out;
+    if(next.length + 2 > max) break;
+    out = next;
+  }
+  return '…/' + out;
+}
+function fullPath(r){
+  if(!r) return '';
+  if(!r.path) return r.name;
+  if(folder && folder.abs) return folder.abs + '/' + r.path;
+  if(folder) return folder.name + '/' + r.path;
+  return r.path;
+}
+function paintTitle(){
+  var r = docs[activeDoc], full = fullPath(r);
+  var el = document.getElementById('docname');
+  el.textContent = shortPath(full, 72);
+  el.title = full;
 }
 function activate(i){
   if(i === activeDoc) return;
@@ -1611,31 +1804,98 @@ function activate(i){
   savedSrc = r.savedSrc; history = r.history || []; fileHandle = r.handle || null;
   openCell = null; insertAt = null; draft = ''; draftBase = ''; rowCache = []; lit = null;
   hidePop();
-  document.getElementById('docname').textContent = r.label || r.name;
-  document.getElementById('docname').title = r.label || r.name;
+  pruneSample();
+  paintTitle();
   render();
   center.scrollTop = r.scrollTop || 0;
 }
-function openDoc(text, name, handle, sub){
+
+/* ===================== remembering the folder ===================== */
+function idbOpen(){
+  return new Promise(function(res, rej){
+    var r = indexedDB.open('critic-notebook', 1);
+    r.onupgradeneeded = function(){ r.result.createObjectStore('kv'); };
+    r.onsuccess = function(){ res(r.result); };
+    r.onerror = function(){ rej(r.error); };
+  });
+}
+function idbSet(k, v){
+  return idbOpen().then(function(db){
+    return new Promise(function(res, rej){
+      var t = db.transaction('kv', 'readwrite');
+      t.objectStore('kv').put(v, k);
+      t.oncomplete = function(){ res(); };
+      t.onerror = function(){ rej(t.error); };
+    });
+  }).catch(function(){});
+}
+function idbGet(k){
+  return idbOpen().then(function(db){
+    return new Promise(function(res){
+      var t = db.transaction('kv', 'readonly'), q = t.objectStore('kv').get(k);
+      q.onsuccess = function(){ res(q.result || null); };
+      q.onerror = function(){ res(null); };
+    });
+  }).catch(function(){ return null; });
+}
+function restoreFolder(){
+  if(!CAN_DIR || typeof indexedDB === 'undefined') return;
+  idbGet('dir').then(function(h){
+    if(!h || !h.queryPermission) return;
+    pendingFolder = h;
+    paintDocList();
+    return h.queryPermission({ mode: 'readwrite' }).then(function(p){
+      if(p === 'granted') return useFolder(h);
+    });
+  }).catch(function(){});
+}
+function openDoc(text, name, handle, path, key){
   var src = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
-  var same = -1;
-  docs.forEach(function(r, i){ if(r.name === name && (r.sub || '') === (sub || '')) same = i; });
-  var rec = { name: name || 'untitled.md', sub: sub || '', label: name, src: src,
+  key = key || ('loose:' + name);
+  var same = findDoc(key);
+  var rec = { key: key, name: name || 'untitled.md', path: path || '', label: name, src: src,
               savedSrc: src, handle: handle || null, history: [], scrollTop: 0 };
   if(same >= 0){ docs[same] = rec; activeDoc = -1; activate(same); }
   else { docs.push(rec); activeDoc = -1; activate(docs.length - 1); }
   center.scrollTop = 0;
   var n = openCount();
-  toast(n ? 'Loaded ' + rec.name + ' — ' + n + ' suggestion' + (n === 1 ? '' : 's')
-          : 'Loaded ' + rec.name + ' — no suggestions yet');
+  toast(n ? rec.name + ' — ' + n + ' suggestion' + (n === 1 ? '' : 's') + ' to review'
+          : rec.name + ' — no suggestions yet');
+}
+function openFile(f){
+  if(f.loading) return;
+  var i = findDoc(f.key);
+  if(i >= 0){ if(i !== activeDoc) guardDirty(function(){ activate(i); }); return; }
+  guardDirty(function(){
+    f.loading = true;
+    f.handle.getFile()
+      .then(function(file){ return file.text(); })
+      .then(function(t){ f.loading = false; openDoc(t, f.name, f.handle, f.path, f.key); })
+      .catch(function(){ f.loading = false; toast('Could not read ' + f.name); });
+  });
 }
 document.getElementById('doclist').addEventListener('click', function(ev){
-  var r = ev.target.closest('button[data-doc]');
+  var b = ev.target.closest('button[data-act2]');
+  if(b){
+    flushEditor();
+    var a = b.dataset.act2;
+    if(a === 'pick') pickFolder();
+    else if(a === 'reconnect') reconnectFolder();
+    else if(a === 'refresh' && folder){
+      files.forEach(function(f){ f.scanned = false; });
+      useFolder(folder.handle);
+    }
+    return;
+  }
+  var r = ev.target.closest('button[data-key]');
   if(!r) return;
-  var i = +r.dataset.doc;
-  if(i === activeDoc) return;
   flushEditor();
-  guardDirty(function(){ activate(i); });
+  var key = r.dataset.key;
+  var f = null;
+  files.forEach(function(x){ if(x.key === key) f = x; });
+  if(f){ openFile(f); return; }
+  var i = findDoc(key);
+  if(i >= 0 && i !== activeDoc) guardDirty(function(){ activate(i); });
 });
 
 /* ===================== unsaved-changes gate ===================== */
@@ -1665,6 +1925,7 @@ function guardDirty(next){
 /* ===================== save / open ===================== */
 var topLevel = (function(){ try{ return window.self === window.top; }catch(e){ return false; } })();
 var CAN_FS = topLevel && typeof window.showSaveFilePicker === 'function';
+var CAN_DIR = topLevel && typeof window.showDirectoryPicker === 'function';
 var CAN_DL = topLevel && (location.protocol === 'file:' ||
              /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname));
 var SAVE_LABEL = CAN_FS ? 'Save' : CAN_DL ? 'Download' : 'Copy';
@@ -1694,6 +1955,10 @@ var MD_TYPES = [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.
 function afterSave(name){
   savedSrc = doc.src;
   syncRecord();
+  var r = docs[activeDoc];
+  if(r) files.forEach(function(f){
+    if(f.key === r.key){ f.count = (doc.src.match(MARK_RE_COUNT) || []).length; f.scanned = true; }
+  });
   paintStatus(); paintDocList();
   toast('Saved to ' + name);
 }
@@ -1720,7 +1985,7 @@ function pickAndSave(text){
         fileHandle = h;
         var r = docs[activeDoc];
         if(r){ r.name = h.name; r.handle = h; r.label = h.name; }
-        document.getElementById('docname').textContent = h.name;
+        paintTitle();
         afterSave(h.name);
         return true;
       });
@@ -1743,30 +2008,16 @@ function downloadText(text){
   toast('Downloaded ' + suggestName());
 }
 
-function openFile(){
+function openAction(){
   flushEditor();
-  guardDirty(function(){
-    if(topLevel && typeof window.showOpenFilePicker === 'function'){
-      window.showOpenFilePicker({ types: MD_TYPES, multiple: true }).then(function(hs){
-        var chain = Promise.resolve();
-        hs.forEach(function(h){
-          chain = chain.then(function(){
-            return h.getFile().then(function(f){
-              return f.text().then(function(t){ openDoc(t, f.name, h); });
-            });
-          });
-        });
-        return chain;
-      }).catch(function(e){
-        if(e && e.name === 'AbortError') return;
-        document.getElementById('file').click();
-      });
-      return;
-    }
-    document.getElementById('file').click();
-  });
+  if(CAN_DIR){ pickFolder(); return; }
+  guardDirty(function(){ document.getElementById('file').click(); });
 }
-document.getElementById('btn-open').addEventListener('click', openFile);
+document.getElementById('btn-open').addEventListener('click', openAction);
+document.getElementById('btn-open').textContent = CAN_DIR ? 'Open folder' : 'Open files';
+document.getElementById('btn-open').title = CAN_DIR
+  ? 'Pick a folder; its markdown files are listed on the left'
+  : 'This browser cannot open folders — pick files instead';
 document.getElementById('btn-save').addEventListener('click', function(){ saveFile(); });
 document.getElementById('file').addEventListener('change', function(ev){
   var list = Array.prototype.slice.call(ev.target.files || []);
@@ -1897,9 +2148,11 @@ function toast(msg){
   document.getElementById('tog-out').setAttribute('aria-pressed', String(out));
 })();
 
-docs.push({ name: 'weekly-notes.md', sub: 'sample', label: 'weekly-notes.md',
+docs.push({ key: 'sample', name: 'weekly-notes.md', path: '', label: 'weekly-notes.md',
             src: SAMPLE, savedSrc: SAMPLE, handle: null, history: [], scrollTop: 0 });
 activeDoc = 0;
+paintTitle();
 render();
+restoreFolder();
 })();
 </script>

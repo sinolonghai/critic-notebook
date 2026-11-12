@@ -14,14 +14,25 @@ import path from 'path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 let code = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
-code = code.replace('render();\n})();', `globalThis.__t={
+code = injectExports(code,
+  `globalThis.__t={
   parse, buildWorking, segment, blocks, lineObjs, resolveRange, buildBlockSource, tidy,
   resolveText, spanOf,
   get d(){return doc}, set d(v){doc=v}, set v(x){view=x}, set li(x){localIdx=x},
   set oc(x){openCell=x}, set ia(x){insertAt=x}
-};\n})();`);
+};`);
 
 /* enough DOM for the page's script to load; it is never rendered here */
+
+/* Inject the export hook before the page script's final IIFE close. Anchoring on a source
+   line is fragile — a boot-sequence edit once made this silently inject nothing, and every
+   test then failed on a missing globalThis.__t instead of on the thing it was testing. */
+function injectExports(code, exports){
+  const at = code.lastIndexOf('})();');
+  if(at < 0) throw new Error('could not find the page script IIFE close');
+  return code.slice(0, at) + exports + '\n' + code.slice(at);
+}
+
 const stub = () => ({
   value: '', textContent: '', innerHTML: '', disabled: false, hidden: false, title: '',
   style: {}, dataset: {}, firstChild: null, scrollHeight: 62,
@@ -40,12 +51,15 @@ global.window = { getSelection: () => null, addEventListener(){}, innerWidth: 12
 global.location = { protocol: 'file:', hostname: '' };
 global.localStorage = { getItem: () => null, setItem(){} };
 Object.defineProperty(global, 'navigator', { value: { platform: 'MacIntel' }, configurable: true });
+global.requestAnimationFrame = function(fn){ return setTimeout(fn, 0); };
+global.cancelAnimationFrame = function(id){ clearTimeout(id); };
 global.Blob = class {};
 global.URL = { createObjectURL: () => '', revokeObjectURL(){} };
 global.FileReader = class {};
 
 new Function(code)();
 const T = globalThis.__t;
+if(!T) throw new Error('export hook did not land — the page script changed shape');
 
 let fails = 0;
 const ok = (cond, msg) => { if(!cond) fails++; console.log((cond ? '  ok   ' : '  FAIL ') + msg); };

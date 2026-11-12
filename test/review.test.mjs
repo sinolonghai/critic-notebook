@@ -1,13 +1,24 @@
 import fs from 'fs';
 const PAGE = new URL('../index.html', import.meta.url);
 let code = fs.readFileSync(PAGE,'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
-code = code.replace('render();\n})();', `globalThis.__t={
+code = injectExports(code,
+  `globalThis.__t={
   parse,buildWorking,segment,blocks,lineObjs,resolveRange,cellMarks,cellHtml,gapHtml,
   tokenize,diffTokens,opsToSource,buildBlockSource,cellComments,tidy,scrub,
   resolveText,spanOf,exportText,protectedRanges,SAMPLE,
   get d(){return doc}, set d(v){doc=v}, set v(x){view=x}, set li(x){localIdx=x},
   set oc(x){openCell=x}, set ia(x){insertAt=x}
-};\n})();`);
+};`);
+
+
+/* Inject the export hook before the page script's final IIFE close. Anchoring on a source
+   line is fragile — a boot-sequence edit once made this silently inject nothing, and every
+   test then failed on a missing globalThis.__t instead of on the thing it was testing. */
+function injectExports(code, exports){
+  const at = code.lastIndexOf('})();');
+  if(at < 0) throw new Error('could not find the page script IIFE close');
+  return code.slice(0, at) + exports + '\n' + code.slice(at);
+}
 
 const el=()=>({value:'',textContent:'',innerHTML:'',disabled:false,hidden:false,style:{},dataset:{},
   classList:{add(){},remove(){},toggle(){},contains:()=>false},addEventListener(){},
@@ -21,9 +32,12 @@ global.window={getSelection:()=>null,addEventListener(){},innerWidth:1200,innerH
 global.location={protocol:'file:',hostname:''};
 global.localStorage={getItem:()=>null,setItem(){}};
 Object.defineProperty(global,'navigator',{value:{platform:'MacIntel'},configurable:true});
+global.requestAnimationFrame = function(fn){ return setTimeout(fn, 0); };
+global.cancelAnimationFrame = function(id){ clearTimeout(id); };
 global.Blob=class{}; global.URL={createObjectURL:()=>'',revokeObjectURL(){}}; global.FileReader=class{};
 new Function(code)();
 const T=globalThis.__t;
+if(!T) throw new Error('export hook did not land — the page script changed shape');
 
 let fails=0;
 const ok=(c,m)=>{ if(!c) fails++; console.log((c?'ok   ':'FAIL ')+m); };
