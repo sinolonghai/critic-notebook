@@ -422,7 +422,7 @@ button,input,textarea{font:inherit;color:inherit}
     <main class="center" id="center">
       <p class="lead" id="lead"><b>Click any block</b> to edit its text; what you changed is recorded as a
       tracked suggestion. Opening another block commits the one you were in — <kbd>Esc</kbd> discards
-      instead. Select a phrase to leave a comment. <kbd>⌘Z</kbd> undoes anything.</p>
+      instead. Select a phrase to leave a comment. <kbd data-mod="Z">⌘Z</kbd> undoes anything.</p>
       <div class="nb" id="nb"></div>
     </main>
 
@@ -446,6 +446,12 @@ button,input,textarea{font:inherit;color:inherit}
 'use strict';
 
 var VERSION = '0.1.0';
+var APPLE = (function(){
+  var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  return /mac|iphone|ipad|ipod/i.test(p);
+})();
+var MOD = APPLE ? '⌘' : 'Ctrl+';
+var ENTER = APPLE ? '⌘↵' : 'Ctrl+Enter';
 var nb = document.getElementById('nb');
 var center = document.getElementById('center');
 var app = document.getElementById('app');
@@ -1120,9 +1126,9 @@ function editorHtml(kind, idx){
     mks = cellMarks(doc.cells[idx]);
     hint = mks.length
       ? 'carries <b>' + mks.length + '</b> existing suggestion' + (mks.length > 1 ? 's' : '') + '; comments are kept'
-      : 'click away to commit · <kbd>Esc</kbd> to discard';
+      : '<kbd>' + ENTER + '</kbd> or click away · <kbd>Esc</kbd> to discard';
   } else {
-    hint = 'new block · click away to commit · <kbd>Esc</kbd> to discard';
+    hint = 'new block · <kbd>' + ENTER + '</kbd> or click away · <kbd>Esc</kbd> to discard';
   }
   return '<div class="ed" data-ed="' + kind + '">' +
     '<textarea id="edbox" spellcheck="false" aria-label="Block text"></textarea>' +
@@ -1260,7 +1266,7 @@ function paintSaveState(){
   b.disabled = !canSave();
   b.title = (r && r.scratch) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
     : !canSave() ? 'No changes to save'
-    : CAN_FS ? 'Write the file (⌘S)' : CAN_DL ? 'Download the .md (⌘S)' : 'Copy the markdown (⌘S)';
+    : CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Download the .md (' + MOD + 'S)' : 'Copy the markdown (' + MOD + 'S)';
 }
 function paintStatus(){
   var open = openCount();
@@ -1369,10 +1375,15 @@ var files = [];           /* [{key, path, name, dir, handle, count, scanned}] */
    local file and the folder you picked is the folder the tool sits in, the page's own
    location gives the prefix — so the title can show a real path instead of a relative one.
    Any other folder falls back to the relative path rather than guessing wrong. */
+var SEP = '/';
 function guessAbs(folderName){
   if(location.protocol !== 'file:') return null;
   var p = decodeURIComponent(location.pathname).replace(/\/[^\/]*$/, '');
-  return p.replace(/^.*\//, '') === folderName ? p : null;
+  if(p.replace(/^.*\//, '') !== folderName) return null;
+  /* file:///C:/x gives pathname "/C:/x" — show it the way the OS writes it */
+  if(/^\/[A-Za-z]:/.test(p)){ SEP = '\\'; return p.slice(1).replace(/\//g, '\\'); }
+  SEP = '/';
+  return p;
 }
 
 /* Start every picker where the work is: the open file's own directory, else the connected
@@ -1899,6 +1910,15 @@ function cellOfNode(node){
   var host = el && el.closest ? el.closest('.cell[data-idx]') : null;
   return host ? doc.cells[+host.dataset.idx] : null;
 }
+/* Range.comparePoint is non-standard; compareBoundaryPoints is not, and says the same
+   thing: -1 the point is before the range, 0 inside it, 1 after. */
+function cmpPoint(r, node, off){
+  var t = (node.ownerDocument || document).createRange();
+  t.setStart(node, off); t.collapse(true);
+  if(r.compareBoundaryPoints(Range.START_TO_START, t) > 0) return -1;
+  if(r.compareBoundaryPoints(Range.START_TO_END, t) < 0) return 1;
+  return 0;
+}
 function selRange(){
   var sel = window.getSelection();
   if(!sel || !sel.rangeCount || sel.isCollapsed) return null;
@@ -1906,7 +1926,6 @@ function selRange(){
   var el = r.commonAncestorContainer;
   el = el.nodeType === 3 ? el.parentNode : el;
   if(!el || !el.closest || !el.closest('.out[data-cell]')) return null;
-  if(!r.comparePoint) return null;
 
   var spans = nb.querySelectorAll('.out .tx'), hits = [];
   for(var i = 0; i < spans.length; i++){
@@ -1915,7 +1934,7 @@ function selRange(){
     var len = tn.nodeValue.length;
     if(!len) continue;
     var cs, ce;
-    try{ cs = r.comparePoint(tn, 0); ce = r.comparePoint(tn, len); } catch(e){ continue; }
+    try{ cs = cmpPoint(r, tn, 0); ce = cmpPoint(r, tn, len); } catch(e){ continue; }
     if(cs > 0 || ce < 0) continue;
     var cell = cellOfNode(spans[i]);
     if(!cell) continue;
@@ -2107,18 +2126,19 @@ function syncRecord(){
 /* keep the filename visible: a long path is trimmed from the left, never the right */
 function shortPath(p, max){
   if(p.length <= max) return p;
-  var parts = p.split('/'), out = parts.pop();
+  var sep = p.indexOf('\\') >= 0 ? '\\' : '/';
+  var parts = p.split(sep), out = parts.pop();
   while(parts.length){
-    var next = parts.pop() + '/' + out;
+    var next = parts.pop() + sep + out;
     if(next.length + 2 > max) break;
     out = next;
   }
-  return '…/' + out;
+  return '…' + sep + out;
 }
 function fullPath(r){
   if(!r) return '';
   if(!r.path) return r.name;
-  if(folder && folder.abs) return folder.abs + '/' + r.path;
+  if(folder && folder.abs) return folder.abs + SEP + (SEP === '\\' ? r.path.replace(/\//g, '\\') : r.path);
   if(folder) return folder.name + '/' + r.path;
   return r.path;
 }
@@ -2191,11 +2211,16 @@ function restoreFolders(){
   }).catch(function(){});
 }
 function openDoc(text, name, handle, path, key){
-  var src = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  var raw = text.replace(/^\uFEFF/, '');
+  /* a CRLF file written back as LF reads as every line changed in git, so remember which
+     this file used and restore it on save */
+  var crlf = (raw.match(/\r\n/g) || []).length;
+  var eol = (crlf > 0 && crlf >= (raw.match(/\n/g) || []).length / 2) ? '\r\n' : '\n';
+  var src = raw.replace(/\r\n?/g, '\n');
   key = key || ('loose:' + name);
   var same = findDoc(key);
   var rec = { key: key, name: name || 'untitled.md', path: path || '', label: name, src: src,
-              savedSrc: src, handle: handle || null, history: [], scrollTop: 0 };
+              savedSrc: src, handle: handle || null, history: [], scrollTop: 0, eol: eol };
   if(same >= 0){ docs[same] = rec; activeDoc = -1; activate(same); }
   else { docs.push(rec); activeDoc = -1; activate(docs.length - 1); }
   center.scrollTop = 0;
@@ -2284,7 +2309,7 @@ var SAVE_LABEL = CAN_FS ? 'Save' : CAN_DL ? 'Download' : 'Copy';
 document.getElementById('btn-save').textContent = SAVE_LABEL;
 document.getElementById('btn-save').title =
   CAN_FS ? 'Write the file (⌘S)' : CAN_DL ? 'Download the .md (⌘S)'
-         : 'This page is sandboxed and cannot write files — copy instead (⌘S)';
+         : 'This page is sandboxed and cannot write files — copy instead (' + MOD + 'S)';
 
 function exportText(){
   var src = doc.src, prot = protectedRanges(src), out = '', at = 0;
@@ -2296,7 +2321,9 @@ function exportText(){
     at = r[1];
   });
   out += src.slice(at).replace(/\n{3,}/g, '\n\n');
-  return out.replace(/[ \t]+$/gm, '').replace(/\s*$/, '') + '\n';
+  out = out.replace(/[ \t]+$/gm, '').replace(/\s*$/, '') + '\n';
+  var r = docs[activeDoc];
+  return (r && r.eol === '\r\n') ? out.replace(/\n/g, '\r\n') : out;
 }
 function suggestName(){
   var n = (docs[activeDoc] && docs[activeDoc].name) || 'untitled.md';
@@ -2545,7 +2572,7 @@ function copyPanel(text){
     var box = v.querySelector('#outbox');
     function manual(){
       box.focus(); box.select();
-      toast('Press ' + (/Mac|iP/.test(navigator.platform) ? '⌘' : 'Ctrl') + '+C');
+      toast('Press ' + (APPLE ? '⌘C' : 'Ctrl+C'));
     }
     try{
       if(navigator.clipboard && navigator.clipboard.writeText){
@@ -2571,6 +2598,8 @@ function toast(msg){
 }
 
 /* ===================== boot ===================== */
+document.querySelectorAll('[data-mod]').forEach(function(k){ k.textContent = MOD + k.dataset.mod; });
+
 (function initPanes(){
   var wide = window.innerWidth >= 1180, mid = window.innerWidth >= 880;
   function want(key, dflt){

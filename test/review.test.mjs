@@ -7,7 +7,7 @@ code = injectExports(code,
   `globalThis.__t={
   parse,buildWorking,segment,blocks,lineObjs,resolveRange,cellMarks,cellHtml,gapHtml,
   tokenize,diffTokens,opsToSource,buildBlockSource,cellComments,tidy,scrub,
-  resolveText,spanOf,exportText,protectedRanges,SAMPLE,
+  resolveText,spanOf,exportText,protectedRanges,SAMPLE,openDoc,cmpPoint,
   get d(){return doc}, set d(v){doc=v}, set v(x){view=x}, set li(x){localIdx=x},
   set oc(x){openCell=x}, set ia(x){insertAt=x}
 };`);
@@ -289,7 +289,32 @@ editNote('Five.{>>drop me<<} Six.', m=>m.t==='com', '', 'emptying');
 // an unauthored comment must not sprout an author
 editNote('A {--x--}{>>no author here<<} B', m=>m.t==='del', 'still no author', 'unauthored');
 
-// ===== 13. the version in the page and in the changelog must agree =====
+// ===== 13. opening a document runs end to end =====
+/* a one-line edit once left `eol` referenced but never declared, so every openDoc threw —
+   parsing the file could not catch it, only running it */
+{
+  const before = fails;
+  try {
+    T.openDoc('# Hi\r\n\r\nA {++marked++} line.\r\n', 'win.md', null, '', 'loose:win.md');
+    ok(true, 'openDoc(CRLF) completes without throwing');
+    ok(T.d.src.indexOf('\r') < 0, 'CRLF normalised to LF in memory');
+    ok(/\r\n/.test(T.exportText()), 'export restores CRLF for a CRLF file');
+    T.openDoc('# Hi\n\nA {++marked++} line.\n', 'nix.md', null, '', 'loose:nix.md');
+    ok(!/\r/.test(T.exportText()), 'export keeps LF for an LF file');
+  } catch(e){
+    fails++; console.log('  FAIL openDoc threw: ' + e.message);
+  }
+  if(fails === before) console.log('  (openDoc path exercised)');
+}
+
+// ===== 14. cmpPoint replaces the non-standard Range.comparePoint =====
+ok(typeof T.cmpPoint === 'function', 'cmpPoint is defined (no Range.comparePoint dependency)');
+{
+  const pageSrc = fs.readFileSync(PAGE,'utf8');
+  ok(!/\.comparePoint\(/.test(pageSrc), 'the page never calls Range.comparePoint');
+}
+
+// ===== 15. the version in the page and in the changelog must agree =====
 {
   const page = fs.readFileSync(PAGE,"utf8").match(/var VERSION = '([^']+)'/);
   const chg  = fs.readFileSync(CHANGELOG,'utf8')

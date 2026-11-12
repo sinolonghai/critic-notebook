@@ -43,6 +43,13 @@ accepting every suggestion reproduces the edited text. Two test files assert it 
 real page — `review.test.mjs` for the cases that have broken before, `documents.test.mjs` for
 whole documents under `samples-local/`.
 
+**Browsers**
+
+Folder mode needs Chromium (Chrome, Edge): the File System Access API exists nowhere else.
+Elsewhere the page falls back to a file input and a download, and survives `localStorage`
+being refused outright. CRLF files are saved back as CRLF, paths render as `C:\…` on Windows,
+and key hints say Ctrl off the Mac.
+
 **Known limits**
 
 Code blocks are not tracked, a comment selection cannot span a mark or a line break,

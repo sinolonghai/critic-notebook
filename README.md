@@ -45,8 +45,19 @@ the folder you picked is the one the tool sits in, the page's own location suppl
 so the title bar shows a real path. Any other folder shows the path relative to it rather than
 guessing wrong.
 
-Outside Chromium there is no folder picker: **Open files** and drag & drop still work, and
-saving falls back to downloading a copy.
+**Browsers.** Chrome or Edge, for folder mode: the File System Access API that supplies folder
+handles and in-place saving exists only in Chromium. Firefox and Safari implement OPFS, a
+private sandbox, which cannot reach your own directories — so this is an API fact, not an
+untested guess.
+
+Everything else is ordinary DOM and works anywhere. Elsewhere the page drops to opening single
+files through a file input or drag & drop, and saving downloads a copy; where even
+`localStorage` is refused (Safari on `file://`) it still edits and exports, just without
+remembering anything. That degraded path is tested by stripping the same APIs from Chromium.
+
+**Windows.** Same engine, so folder mode works. A file opened with CRLF line endings is saved
+back with CRLF, so a round trip does not show up as every line changed; paths are shown as
+`C:\Users\…` and shortcut hints say Ctrl rather than ⌘.
 
 **From a URL.** Serve `index.html` anywhere static (GitHub Pages works) and send people the
 link. Nothing is uploaded — the file they open is read in their own browser and never leaves it.
