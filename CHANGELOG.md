@@ -9,6 +9,7 @@
   untouched blocks collapse. Read-only for now.
 - `tools/history.mjs` exports a file's past versions into `history/` for the Compare tab, so
   git history is read by git rather than by a packfile parser in the browser.
+- README gains a **Later** section recording what is planned and what makes each piece hard.
 - Fixes a parser bug the compare work surfaced, latent in the editor all along: a mark whose
   text contains one backtick — which a diff produces as soon as formatting changes — left a
   stray backtick that paired with the next one in the document, and the inline-code span that

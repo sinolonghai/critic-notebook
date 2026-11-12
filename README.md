@@ -286,6 +286,37 @@ for folders no longer in that history is pruned with it, so the keys do not accu
 In Chrome every `file://` page shares one storage bucket, so moving `critic-notebook.html` to another
 directory keeps all of it. Clearing site data, or a private window, starts over.
 
+## Later
+
+Roughly in the order they would be worth doing. Each note says what makes it hard, because
+that is the part that gets forgotten.
+
+**Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
+only draws them. Writing the result back out gives a third document whose differences *are*
+tracked suggestions — Word's "legal blackline" — which can then be accepted or rejected one at
+a time in the editor. The invariant comes along for free: reject-all is the older version,
+accept-all is the newer. Mostly reassembly, plus the newline rules whole-document output needs.
+
+**Take individual changes across versions.** The natural use of a blackline. It should produce
+a *new commit*, never a revert: prose is exactly the case where you accept one paragraph and
+reject the next, so "go back to version N" is the wrong shape for the problem.
+
+**Combine two reviewers' copies.** Word's *Combine*, and a different thing entirely: two people
+each edited the same original, and both sets of changes merge into one document with each
+attributed. Needs a common ancestor — `git merge-base` where there is a repo, and asking
+otherwise — and a way to show a genuine conflict, which CriticMarkup has no syntax for. Worth
+designing only once two people are actually editing the same file.
+
+**Browser tests in the repo.** The node suites cannot reach the interface, and three bugs so
+far were visible only in a browser: an empty bullet in Original, a comment row with no way to
+edit it, a column that collapsed to five words wide. Playwright would be the first real
+dev dependency, so the test files would need to skip cleanly when it is absent.
+
+**Read git directly.** It would remove `tools/history.mjs`, since the page already holds a
+handle on the repository and browsers now decompress zlib natively. Loose objects are easy;
+packfiles are not, and a reader that handled only loose objects would work on a fresh repo and
+quietly stop after the first `git gc` — which is worse than not having it.
+
 ## Known limits
 
 - **Code blocks are not tracked.** CriticMarkup inside a fence is never parsed, so marking one
