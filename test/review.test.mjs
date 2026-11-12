@@ -1,5 +1,5 @@
 import fs from 'fs';
-const PAGE = new URL('../index.html', import.meta.url);
+const PAGE = new URL('../critic-notebook.html', import.meta.url);
 /* resolved here, before the DOM shims replace global.URL with a blob-download stub */
 const CHANGELOG = new URL('../CHANGELOG.md', import.meta.url);
 let code = fs.readFileSync(PAGE,'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];

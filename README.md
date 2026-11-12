@@ -4,10 +4,15 @@
 
 Review Markdown the way you'd review a document — but keep the revisions in the file.
 
-A single HTML file. No install, no build, no server, no dependencies. Open it in a browser,
-open a `.md`, and every block of the document becomes a cell you can click and rewrite in
-plain prose. What you changed is recorded as [CriticMarkup](http://criticmarkup.com/) inside
-the Markdown itself, so the revisions travel with the file and stay readable in any editor.
+One HTML file. No install, no build, no server, no dependencies. Open it in a browser, open a
+`.md`, and every block of the document becomes a cell you can click and rewrite in plain prose.
+What you changed is recorded as [CriticMarkup](http://criticmarkup.com/) inside the Markdown
+itself, so the revisions travel with the file and stay readable in any editor.
+
+> **Use Chrome or Edge.** Opening a folder and saving back to the file you opened rely on the
+> File System Access API, which exists only in Chromium. Firefox and Safari still open, edit,
+> comment and export — one file at a time, saving as a download. See
+> [Browsers and platforms](#browsers-and-platforms).
 
 ## Why
 
@@ -23,9 +28,70 @@ Markdown has no notion of tracked changes. The usual answers are unsatisfying:
 This fills that last gap: a reviewer who has never heard of CriticMarkup opens one file,
 edits text normally, and produces correct markup.
 
+## Getting it
+
+The whole program is one file: **`critic-notebook.html`**. You do not need git, Node, or an
+account to use it — only to run the tests.
+
+### From the GitHub page
+
+1. Open **`critic-notebook.html`** in the file list.
+2. GitHub will not render it; it shows the source. Click the **download icon** (↓) in the bar
+   above the file — it sits next to *Raw* and *Copy*.
+3. If you do not see that button, right-click the **Raw** button and choose
+   **Save Link As…** (Chrome, Edge) or **Download Linked File As…** (Safari).
+
+Save it anywhere you like. A Downloads folder is fine; beside the documents you review is
+better, because then the title bar can show full paths.
+
+### From the command line
+
+```sh
+# public repo
+curl -O https://raw.githubusercontent.com/sinolonghai/critic-notebook/main/critic-notebook.html
+
+# while the repo is private, through the GitHub CLI
+gh api repos/sinolonghai/critic-notebook/contents/critic-notebook.html \
+  --jq '.content' | base64 -d > critic-notebook.html
+```
+
+Or clone the whole thing, if you also want the samples and tests:
+
+```sh
+git clone https://github.com/sinolonghai/critic-notebook.git
+cd critic-notebook
+```
+
+### Running it
+
+It is a web page, not a program — there is nothing to install or launch. Open the file in
+Chrome:
+
+```sh
+open -a "Google Chrome" critic-notebook.html     # macOS
+xdg-open critic-notebook.html                    # Linux
+start chrome critic-notebook.html                # Windows
+```
+
+Double-clicking works too, as long as your default browser is Chrome or Edge. The address bar
+should read `file:///…/critic-notebook.html`.
+
+That is all. The page opens on a built-in tutorial; click **Open folder** when you are ready to
+work on your own files. Nothing is uploaded, and no network connection is needed — only the web
+fonts come from the internet, and the page is perfectly legible without them.
+
+### Running the tests
+
+Only needed if you are changing the tool. Node 18 or newer, no packages to install:
+
+```sh
+node test/review.test.mjs      # unit: the cases that have broken before
+node test/documents.test.mjs   # whole documents end to end
+```
+
 ## Using it
 
-**Locally.** Download `index.html` and open it. There are two ways in:
+**Opening.** There are two ways in:
 
 - **Open folder** — the left pane shows it as a tree. Subfolders start collapsed, with the
   number of files and of open suggestions beneath them, so a large project does not bury the
@@ -45,22 +111,10 @@ the folder you picked is the one the tool sits in, the page's own location suppl
 so the title bar shows a real path. Any other folder shows the path relative to it rather than
 guessing wrong.
 
-**Browsers.** Chrome or Edge, for folder mode: the File System Access API that supplies folder
-handles and in-place saving exists only in Chromium. Firefox and Safari implement OPFS, a
-private sandbox, which cannot reach your own directories — so this is an API fact, not an
-untested guess.
-
-Everything else is ordinary DOM and works anywhere. Elsewhere the page drops to opening single
-files through a file input or drag & drop, and saving downloads a copy; where even
-`localStorage` is refused (Safari on `file://`) it still edits and exports, just without
-remembering anything. That degraded path is tested by stripping the same APIs from Chromium.
-
-**Windows.** Same engine, so folder mode works. A file opened with CRLF line endings is saved
-back with CRLF, so a round trip does not show up as every line changed; paths are shown as
-`C:\Users\…` and shortcut hints say Ctrl rather than ⌘.
-
-**From a URL.** Serve `index.html` anywhere static (GitHub Pages works) and send people the
-link. Nothing is uploaded — the file they open is read in their own browser and never leaves it.
+**Sharing it.** Send someone the HTML file and they can review a document without installing
+anything. Or serve `critic-notebook.html` from any static host — GitHub Pages included — and
+send a link. Nothing is uploaded either way: the document they open is read in their own
+browser and never leaves it.
 
 ### What you do
 
@@ -89,14 +143,28 @@ that block.
 | Jump between touched blocks | `↑ prev` / `next ↓` in the outline |
 | Fold a side pane | the two buttons at the top left |
 
-Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author gets
-a colour. The three view tabs show the document marked up, as the original, or as it would read
-with everything accepted.
+Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author
+gets a colour.
 
 Edits are diffed against the **original**, not against your previous edit, so changing the same
 sentence five times still produces one clean `{~~old~>new~~}` rather than five nested layers.
 The diff is word-level for Latin scripts and character-level for CJK, so changing two characters
 in a Chinese paragraph marks two characters.
+
+## Browsers and platforms
+
+**Chrome or Edge** for folder mode: the File System Access API that supplies folder handles and
+in-place saving exists only in Chromium. Firefox and Safari implement OPFS, a private sandbox
+that cannot reach your own directories — so this is an API fact, not an untested guess.
+
+Everything else is ordinary DOM and works anywhere. Elsewhere the page drops to opening single
+files through a file input or drag & drop, and saving downloads a copy; where even
+`localStorage` is refused (Safari on `file://`) it still edits and exports, just without
+remembering anything. That degraded path is tested by stripping the same APIs from Chromium.
+
+**Windows.** Same engine, so folder mode works. A file opened with CRLF line endings is saved
+back with CRLF, so a round trip does not show up as every line changed; paths are shown as
+`C:\Users\…` and shortcut hints say Ctrl rather than ⌘.
 
 ## The invariant
 
@@ -112,14 +180,9 @@ The non-obvious consequence, and the thing that took three bugs to learn: **text
 belongs to the original.** A newline placed outside a mark survives a reject, so adding a list
 item or a paragraph has to put its newline *inside* the mark, not beside it.
 
-Two test files assert it. Both run the real page — they extract the script from `index.html`
-and call its live functions, so they cannot drift from the implementation. No dependencies;
-Node 18+ and nothing else.
-
-```
-node test/review.test.mjs      # unit: the cases that have broken before
-node test/documents.test.mjs   # whole documents end to end
-```
+Two test files assert it ([how to run them](#running-the-tests)). Both run the real page —
+they extract the script from `critic-notebook.html` and call its live functions, so they cannot
+drift from the implementation.
 
 `review.test.mjs` covers CJK and Latin edits, list insertion and deletion, multi-line
 paragraphs, tables, headings, whole-block deletion, `+`-inserted blocks, author stamps,
@@ -190,7 +253,7 @@ instead of being picked again.
 Folder history keeps the **8 most recent**; older entries fall off the end. Expansion state
 for folders no longer in that history is pruned with it, so the keys do not accumulate.
 
-In Chrome every `file://` page shares one storage bucket, so moving `index.html` to another
+In Chrome every `file://` page shares one storage bucket, so moving `critic-notebook.html` to another
 directory keeps all of it. Clearing site data, or a private window, starts over.
 
 ## Known limits

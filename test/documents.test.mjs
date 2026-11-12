@@ -13,7 +13,7 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-let code = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
+let code = fs.readFileSync(path.join(ROOT, 'critic-notebook.html'), 'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
 code = injectExports(code,
   `globalThis.__t={
   parse, buildWorking, segment, blocks, lineObjs, resolveRange, buildBlockSource, tidy,
