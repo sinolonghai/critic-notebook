@@ -139,11 +139,13 @@ button,input,textarea{font:inherit;color:inherit}
 .folder-bar button{flex:0 0 auto;border:1px solid var(--rule-strong);background:var(--surface);
   border-radius:5px;width:24px;height:22px;padding:0;cursor:pointer;font-size:11px;line-height:1;color:var(--ink-faint)}
 .folder-bar button:hover{border-color:var(--accent);color:var(--accent)}
-.pane-cta{display:block;width:100%;border:1px dashed var(--rule-strong);background:transparent;
-  border-radius:8px;padding:11px 10px;cursor:pointer;font-size:12.5px;color:var(--ink-soft);text-align:center}
-.pane-cta:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
-.pane-cta b{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
-.pane-cta:hover b{color:var(--accent)}
+.cta-row{display:flex;flex-wrap:wrap;gap:5px;padding:12px 2px 2px;margin-top:6px;border-top:1px solid var(--rule)}
+.cta-row button{flex:1 1 auto;border:1px dashed var(--rule-strong);background:transparent;border-radius:7px;
+  padding:7px 9px;cursor:pointer;font-size:12px;color:var(--ink-soft);white-space:nowrap}
+.cta-row button:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
+.doc-row .ico{flex:0 0 auto;font-size:9px;color:var(--ink-faint);font-family:var(--mono)}
+.doc-row.hist .nm{color:var(--ink-soft)}
+.doc-row.hist:hover .nm{color:var(--ink)}
 
 /* outline */
 .out-row{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;
@@ -366,13 +368,14 @@ button,input,textarea{font:inherit;color:inherit}
       <button type="button" data-view="final" aria-pressed="false">Final</button>
     </div>
     <div class="whoami">
-      <label for="author">as</label>
-      <input type="text" id="author" placeholder="your name" maxlength="16" autocomplete="off" spellcheck="false">
+      <label for="author" title="Your suggestions are attributed to this name">Sign as</label>
+      <input type="text" id="author" placeholder="your name" maxlength="16" autocomplete="off" spellcheck="false"
+             title="Your suggestions are attributed to this name, written into the file as @name">
     </div>
     <div class="tools">
       <button type="button" class="btn" id="btn-undo" disabled>Undo</button>
-      <button type="button" class="btn" id="btn-open">Open</button>
-      <button type="button" class="btn" id="btn-paste">Paste</button>
+      <button type="button" class="btn" id="btn-open">Open folder</button>
+      <button type="button" class="btn" id="btn-openfile">Open file</button>
       <button type="button" class="btn" id="btn-saveas" hidden>Save as…</button>
       <button type="button" class="btn primary" id="btn-save">Save</button>
     </div>
@@ -928,6 +931,17 @@ function opsToSource(ops, stamp){
   return out;
 }
 function scrub(s){ return String(s).replace(DANGER_RE, ' '); }
+/* An unlabelled box in the corner teaches nobody; say it once, the first time it matters. */
+var signHinted = false;
+try{ signHinted = localStorage.getItem('cm-signhint') === '1'; }catch(e){}
+function maybeSignHint(){
+  if(signHinted || authorName()) return;
+  signHinted = true;
+  try{ localStorage.setItem('cm-signhint', '1'); }catch(e){}
+  setTimeout(function(){
+    toast('Recorded unsigned — fill “Sign as” at the top right to put your name on suggestions');
+  }, 1900);
+}
 function tidy(s){
   return scrub(s).replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n+$/, '');
 }
@@ -1257,14 +1271,15 @@ function jumpSuggestion(dir){
   scrollToCell(list[next], true);
 }
 
-/* ===================== folder ===================== */
-/* cheap top-level suggestion count for the list, without parsing each document */
+/* ===================== folders and files ===================== */
+/* Folder mode and file mode are not a stored flag — folder mode is simply "a folder is
+   connected". One piece of state instead of two that can disagree. */
 var MARK_RE_COUNT = /\{\+\+[\s\S]*?\+\+\}|\{--[\s\S]*?--\}|\{~~[\s\S]*?~~\}|\{==[\s\S]*?==\}/g;
 var MD_FILE = /\.(md|markdown|mdown)$/i;
 var SKIP_DIR = { 'node_modules':1, 'dist':1, 'build':1, '.git':1 };
 
-var folder = null;        /* {handle, name, abs} once connected */
-var pendingFolder = null; /* remembered handle still waiting for permission */
+var folder = null;        /* {handle, name, abs} — non-null means folder mode */
+var folderHistory = [];   /* [{handle, name, ts}] most recent first */
 var files = [];           /* [{key, path, name, dir, handle, count, scanned}] */
 
 /* The page can never learn a file's absolute path. But when the tool itself is opened as a
@@ -1277,9 +1292,21 @@ function guessAbs(folderName){
   return p.replace(/^.*\//, '') === folderName ? p : null;
 }
 
+/* Start every picker where the work is: the open file's own directory, else the connected
+   folder. `id` lets the browser remember across sessions, and wins over startIn, so the
+   calls that must land somewhere specific omit it. */
+function pickerOpts(extra, anchored){
+  var o = {};
+  if(!anchored) o.id = 'critic-notebook';
+  if(fileHandle) o.startIn = fileHandle;
+  else if(folder) o.startIn = folder.handle;
+  if(extra) for(var k in extra) o[k] = extra[k];
+  return o;
+}
+
 function walkFolder(dir, prefix, depth, out){
   if(depth > 6) return Promise.resolve(out);
-  var it = dir.entries(), chain = Promise.resolve();
+  var it = dir.entries();
   function step(){
     return it.next().then(function(res){
       if(res.done) return out;
@@ -1290,14 +1317,14 @@ function walkFolder(dir, prefix, depth, out){
       return step();
     });
   }
-  return chain.then(step);
+  return step();
 }
 
 function useFolder(h, quiet){
   folder = { handle: h, name: h.name, abs: guessAbs(h.name) };
-  pendingFolder = null;
   files = [];
   paintDocList();
+  rememberFolder(h);
   return walkFolder(h, '', 0, []).then(function(list){
     /* sort by path segments: plain string order puts "samples-local/" before "samples/",
        because '-' sorts below '/'. Swapping the separator for NUL restores tree order. */
@@ -1308,13 +1335,32 @@ function useFolder(h, quiet){
     });
     files = list;
     pruneSample();
+    relocateActive();
     paintDocList();
     scanCounts();
     if(!quiet) toast(list.length ? h.name + ' — ' + list.length + ' markdown file' + (list.length === 1 ? '' : 's')
                                  : 'No markdown files in ' + h.name);
-  }).catch(function(e){
-    toast('Could not read that folder');
-  });
+  }).catch(function(){ toast('Could not read that folder'); });
+}
+
+function toFileMode(){
+  folder = null;
+  files = [];
+  paintTitle();
+  paintDocList();
+}
+
+/* if the open document lives inside the newly connected folder, give it its path there */
+function relocateActive(){
+  var r = docs[activeDoc];
+  if(!r || !fileHandle || !folder || !folder.handle.resolve) return Promise.resolve();
+  return folder.handle.resolve(fileHandle).then(function(segs){
+    if(!segs) return;
+    r.path = segs.join('/');
+    r.key = r.path;
+    paintTitle();
+    paintDocList();
+  }).catch(function(){});
 }
 
 /* fill in per-file suggestion counts in the background, with a budget so a big folder
@@ -1339,21 +1385,53 @@ function scanCounts(){
   chain.then(paintDocList);
 }
 
-function pickFolder(){
-  return window.showDirectoryPicker({ mode: 'readwrite' }).then(function(h){
-    idbSet('dir', h);
+/* ---------- folder history ---------- */
+function saveHistory(){
+  return idbSet('folders', folderHistory.map(function(e){
+    return { handle: e.handle, name: e.name, ts: e.ts };
+  }));
+}
+/* Two folders can share a basename, so identity is isSameEntry, not the name — and that is
+   async, hence the chain. */
+function rememberFolder(h){
+  var chain = Promise.resolve(-1);
+  folderHistory.forEach(function(e, i){
+    chain = chain.then(function(found){
+      if(found >= 0) return found;
+      if(!e.handle || !e.handle.isSameEntry) return -1;
+      return e.handle.isSameEntry(h).then(function(same){ return same ? i : -1; }).catch(function(){ return -1; });
+    });
+  });
+  return chain.then(function(i){
+    if(i >= 0) folderHistory.splice(i, 1);
+    folderHistory.unshift({ handle: h, name: h.name, ts: Date.now() });
+    if(folderHistory.length > 8) folderHistory.length = 8;
+    paintDocList();
+    return saveHistory();
+  });
+}
+function openHistory(i){
+  var e = folderHistory[i];
+  if(!e || !e.handle) return;
+  var go = function(){ return useFolder(e.handle); };
+  if(!e.handle.queryPermission) return go();
+  e.handle.queryPermission({ mode: 'readwrite' }).then(function(p){
+    if(p === 'granted') return go();
+    return e.handle.requestPermission({ mode: 'readwrite' }).then(function(q){
+      if(q === 'granted') return go();
+      toast('Permission declined');
+    });
+  }).catch(function(){ toast('That folder is no longer reachable — open it again'); });
+}
+
+function pickFolder(anchor){
+  if(!CAN_DIR){ toast('This browser cannot open folders'); return Promise.resolve(); }
+  var opts = anchor ? { mode: 'readwrite', startIn: anchor } : pickerOpts({ mode: 'readwrite' });
+  return window.showDirectoryPicker(opts).then(function(h){
     return useFolder(h);
   }).catch(function(e){
     if(!e || e.name !== 'AbortError') toast('Could not open that folder');
   });
-}
-function reconnectFolder(){
-  if(!pendingFolder) return;
-  var h = pendingFolder;
-  h.requestPermission({ mode: 'readwrite' }).then(function(p){
-    if(p === 'granted') useFolder(h);
-    else toast('Permission declined');
-  }).catch(function(){ toast('Could not reconnect — pick the folder again'); });
 }
 
 /* ===================== document list ===================== */
@@ -1368,16 +1446,23 @@ function fileDirty(f){
   if(i < 0) return false;
   return i === activeDoc ? isDirty() : docs[i].src !== docs[i].savedSrc;
 }
-function rowHtml(label, key, cnt, dirtyNow, isActive, pend){
-  return '<button type="button" class="doc-row' + (pend ? ' pend' : '') + '" data-key="' + esc(key) + '" aria-current="' + isActive + '">' +
+function rowHtml(label, key, cnt, dirtyNow, isActive){
+  return '<button type="button" class="doc-row" data-key="' + esc(key) + '" aria-current="' + isActive + '">' +
     '<span class="nm">' + esc(label) + '</span>' +
     (cnt ? '<span class="badge">' + cnt + '</span>' : '') +
     (dirtyNow ? '<span class="udot" title="unsaved">●</span>' : '') + '</button>';
 }
+function docRows(list){
+  return list.map(function(r){
+    var i = findDoc(r.key);
+    var src = i === activeDoc ? doc.src : r.src;
+    return rowHtml(r.name, r.key, (src.match(MARK_RE_COUNT) || []).length,
+      i === activeDoc ? isDirty() : r.src !== r.savedSrc, i === activeDoc);
+  }).join('');
+}
 
 function paintDocList(){
   var host = document.getElementById('doclist');
-  var loose = docs.filter(function(r){ return !r.path; });
   var html = '';
 
   if(folder){
@@ -1396,34 +1481,36 @@ function paintDocList(){
             esc(f.dir ? shortPath(f.dir.replace(/\/$/, ''), 26) : './') + '</div>';
         }
         var i = findDoc(f.key);
-        html += rowHtml(f.name, f.key, fileCount(f), fileDirty(f), i >= 0 && i === activeDoc, false);
+        html += rowHtml(f.name, f.key, fileCount(f), fileDirty(f), i >= 0 && i === activeDoc);
       });
     }
-  } else if(pendingFolder){
-    html += '<button type="button" class="pane-cta" data-act2="reconnect">' +
-      '<b>' + esc(pendingFolder.name) + '</b>Click to reconnect this folder</button>';
-  } else if(CAN_DIR){
-    html += '<button type="button" class="pane-cta" data-act2="pick"><b>Open a folder</b>' +
-      'Its markdown files are listed here</button>';
+    /* a document open but not inside this folder must stay visible — hiding one with
+       unsaved changes is how work gets lost */
+    var outside = docs.filter(function(r){ return !r.path; });
+    if(outside.length){
+      html += '<div class="grp">not in this folder</div>' + docRows(outside);
+    }
+  } else {
+    html += '<div class="grp">open</div>' + docRows(docs);
+    if(folderHistory.length){
+      html += '<div class="grp">recent folders</div>' +
+        folderHistory.map(function(e, i){
+          return '<button type="button" class="doc-row hist" data-hist="' + i + '" aria-current="false">' +
+            '<span class="ico">▸</span><span class="nm">' + esc(e.name) + '</span></button>';
+        }).join('');
+    }
+    html += '<div class="cta-row">' +
+      (CAN_DIR ? '<button type="button" data-act2="pick">Open folder</button>' : '') +
+      '<button type="button" data-act2="file">Open file</button>' +
+      '<button type="button" data-act2="paste">Paste</button></div>';
   }
 
-  if(loose.length){
-    html += '<div class="grp">' + (folder ? 'not in folder' : 'open') + '</div>';
-    loose.forEach(function(r){
-      var i = findDoc(r.key);
-      var src = i === activeDoc ? doc.src : r.src;
-      html += rowHtml(r.name, r.key, (src.match(MARK_RE_COUNT) || []).length,
-        i === activeDoc ? isDirty() : r.src !== r.savedSrc, i === activeDoc, false);
-    });
-  }
-  if(!html) html = '<div class="pane-empty">Nothing open.</div>';
   host.innerHTML = html;
   document.getElementById('doc-ct').textContent = folder ? (files.length || '') : (docs.length || '');
-
   document.getElementById('side-foot').innerHTML =
-    !CAN_DIR ? 'This browser cannot open folders — use drag &amp; drop, or Chrome for folder mode.'
+    !CAN_DIR ? 'This browser cannot open folders — open single files, or use Chrome for folder mode.'
     : folder ? 'Click a file to open it. The folder is remembered across reloads.'
-    : 'Pick a folder once; it is remembered across reloads.';
+    : 'Open a folder to work through its files, or a single file on its own.';
 }
 
 /* ===================== source edits ===================== */
@@ -1514,6 +1601,7 @@ function flushEditor(){
     else if(wasInsert === 0){ at = cells[0].a; repl = '{++' + body + '\n\n++}' + stamp; }
     else { at = cells[Math.min(wasInsert, cells.length) - 1].b; repl = '{++\n\n' + body + '++}' + stamp; }
     editSource(at, at, repl);
+    maybeSignHint();
     toast('New block added as a suggestion');
     return true;
   }
@@ -1525,6 +1613,7 @@ function flushEditor(){
   var hadDelims = DANGER_RE.test(text);
   DANGER_RE.lastIndex = 0;
   editSource(cell.a, cell.b, built.src + kept);
+  if(built.changed) maybeSignHint();
   toast(hadDelims ? 'Recorded (markup characters you typed were replaced with spaces)'
                   : (built.changed ? 'Change recorded' : 'Block restored to the original'));
   return true;
@@ -1796,6 +1885,17 @@ document.addEventListener('keydown', function(ev){
 
 /* ===================== documents ===================== */
 function findDoc(key){ for(var i = 0; i < docs.length; i++) if(docs[i].key === key) return i; return -1; }
+/* Save-as can rename the open document onto a key another record already holds — the file
+   that was open under that name a moment ago. The renamed one wins; the stale row goes. */
+function dropDuplicate(){
+  var keep = activeDoc, k = docs[keep] && docs[keep].key;
+  if(!k) return;
+  for(var i = docs.length - 1; i >= 0; i--){
+    if(i === keep || docs[i].key !== k) continue;
+    docs.splice(i, 1);
+    if(keep > i){ keep--; activeDoc--; }
+  }
+}
 /* once a real file is open, the untouched sample is just noise in the list */
 function pruneSample(){
   if(!folder) return;
@@ -1878,14 +1978,20 @@ function idbGet(k){
     });
   }).catch(function(){ return null; });
 }
-function restoreFolder(){
+function restoreFolders(){
   if(!CAN_DIR || typeof indexedDB === 'undefined') return;
-  idbGet('dir').then(function(h){
-    if(!h || !h.queryPermission) return;
-    pendingFolder = h;
+  idbGet('folders').then(function(list){
+    if(Array.isArray(list) && list.length){ folderHistory = list; return; }
+    /* migrate the single remembered handle the earlier version stored */
+    return idbGet('dir').then(function(h){
+      if(h) folderHistory = [{ handle: h, name: h.name, ts: Date.now() }];
+    });
+  }).then(function(){
     paintDocList();
-    return h.queryPermission({ mode: 'readwrite' }).then(function(p){
-      if(p === 'granted') return useFolder(h);
+    var top = folderHistory[0];
+    if(!top || !top.handle || !top.handle.queryPermission) return;
+    return top.handle.queryPermission({ mode: 'readwrite' }).then(function(p){
+      if(p === 'granted') return useFolder(top.handle, true);
     });
   }).catch(function(){});
 }
@@ -1919,14 +2025,17 @@ document.getElementById('doclist').addEventListener('click', function(ev){
   if(b){
     flushEditor();
     var a = b.dataset.act2;
-    if(a === 'pick') pickFolder();
-    else if(a === 'reconnect') reconnectFolder();
+    if(a === 'pick') guardDirty(function(){ pickFolder(); });
+    else if(a === 'file') openSingleFile();
+    else if(a === 'paste') pastePanel();
     else if(a === 'refresh' && folder){
       files.forEach(function(f){ f.scanned = false; });
-      useFolder(folder.handle);
+      useFolder(folder.handle, true);
     }
     return;
   }
+  var hb = ev.target.closest('button[data-hist]');
+  if(hb){ flushEditor(); guardDirty(function(){ openHistory(+hb.dataset.hist); }); return; }
   var r = ev.target.closest('button[data-key]');
   if(!r) return;
   flushEditor();
@@ -2024,12 +2133,40 @@ function adoptHandle(h){
   if(!r){ paintTitle(); return Promise.resolve(); }
   r.name = h.name; r.handle = h; r.label = h.name; r.scratch = false;
   r.path = ''; r.key = 'loose:' + h.name;
-  if(!folder || !folder.handle.resolve){ paintTitle(); return Promise.resolve(); }
+  dropDuplicate();
+  if(!folder || !folder.handle.resolve){ paintTitle(); paintDocList(); return Promise.resolve(); }
+  var home = folder;
   return folder.handle.resolve(h).then(function(segs){
-    if(segs){ r.path = segs.join('/'); r.key = r.path; }
-    paintTitle();
-    if(segs) return useFolder(folder.handle, true);
-  }).catch(function(){ paintTitle(); });
+    if(segs){
+      r.path = segs.join('/'); r.key = r.path;
+      dropDuplicate();
+      paintTitle();
+      return useFolder(home.handle, true);
+    }
+    paintTitle(); paintDocList();
+    offerFolderFor(h, home.name);
+  }).catch(function(){ paintTitle(); paintDocList(); });
+}
+/* A file saved outside the connected folder has no path we can show — only its name. The
+   picker can be anchored at that file, so connecting its folder is two clicks and the path
+   comes back. Declining drops to file mode, which at least stops the pane from claiming the
+   document belongs to a folder it does not. */
+function offerFolderFor(h, homeName){
+  if(!CAN_DIR){ toFileMode(); return; }
+  var v = openPanel({
+    narrow: true,
+    title: 'Saved outside the folder',
+    body: '<p class="hint"><b>' + esc(h.name) + '</b> was saved outside <b>' + esc(homeName) + '</b>, ' +
+          'so its path is unknown — only the filename can be shown.</p>' +
+          '<p class="hint">Opening its folder restores the full path and lists the files beside it.</p>',
+    foot: '<button type="button" class="btn" data-x="single">Keep as a single file</button>' +
+          '<button type="button" class="btn primary" data-x="folder">Open its folder</button>'
+  });
+  v.querySelector('[data-x="single"]').addEventListener('click', function(){ v.remove(); toFileMode(); });
+  v.querySelector('[data-x="folder"]').addEventListener('click', function(){
+    v.remove();
+    pickFolder(h);
+  });
 }
 function pickAndSave(text){
   return window.showSaveFilePicker({ suggestedName: suggestName(), types: MD_TYPES })
@@ -2069,16 +2206,47 @@ function downloadText(text){
   toast('Downloaded ' + suggestName());
 }
 
-function openAction(){
-  flushEditor();
-  if(CAN_DIR){ pickFolder(); return; }
-  guardDirty(function(){ document.getElementById('file').click(); });
+/* Opening a single file that happens to live inside the connected folder should not throw
+   the folder away — same rule as Save as. */
+function adoptSingle(h, text){
+  if(folder && folder.handle.resolve){
+    return folder.handle.resolve(h).then(function(segs){
+      if(segs){ openDoc(text, h.name, h, segs.join('/'), segs.join('/')); return; }
+      toFileMode();
+      openDoc(text, h.name, h, '', 'loose:' + h.name);
+    }).catch(function(){
+      toFileMode();
+      openDoc(text, h.name, h, '', 'loose:' + h.name);
+    });
+  }
+  toFileMode();
+  openDoc(text, h.name, h, '', 'loose:' + h.name);
+  return Promise.resolve();
 }
-document.getElementById('btn-open').addEventListener('click', openAction);
-document.getElementById('btn-open').textContent = CAN_DIR ? 'Open folder' : 'Open files';
-document.getElementById('btn-open').title = CAN_DIR
-  ? 'Pick a folder; its markdown files are listed on the left'
-  : 'This browser cannot open folders — pick files instead';
+function openSingleFile(){
+  flushEditor();
+  guardDirty(function(){
+    if(CAN_FS && typeof window.showOpenFilePicker === 'function'){
+      window.showOpenFilePicker(pickerOpts({ types: MD_TYPES, multiple: false })).then(function(hs){
+        var h = hs[0];
+        return h.getFile().then(function(f){ return f.text(); }).then(function(t){ return adoptSingle(h, t); });
+      }).catch(function(e){
+        if(e && e.name === 'AbortError') return;
+        document.getElementById('file').click();
+      });
+      return;
+    }
+    document.getElementById('file').click();
+  });
+}
+document.getElementById('btn-open').addEventListener('click', function(){
+  flushEditor();
+  guardDirty(function(){ pickFolder(); });
+});
+document.getElementById('btn-open').hidden = !CAN_DIR;
+document.getElementById('btn-open').title = 'Pick a folder; its markdown files are listed on the left';
+document.getElementById('btn-openfile').addEventListener('click', openSingleFile);
+document.getElementById('btn-openfile').title = 'Open one file on its own';
 document.getElementById('btn-save').addEventListener('click', function(){ saveFile(); });
 var saveAsBtn = document.getElementById('btn-saveas');
 saveAsBtn.hidden = !CAN_FS;
@@ -2143,7 +2311,7 @@ function openPanel(opts){
   if(opts.after) opts.after(veil);
   return veil;
 }
-document.getElementById('btn-paste').addEventListener('click', function(){
+function pastePanel(){
   flushEditor();
   var v = openPanel({
     title: 'Paste Markdown',
@@ -2157,9 +2325,9 @@ document.getElementById('btn-paste').addEventListener('click', function(){
   v.querySelector('#pasteok').addEventListener('click', function(){
     var t = v.querySelector('#pastebox').value;
     v.remove();
-    if(t.trim()) openDoc(t, 'pasted.md', null);
+    if(t.trim()) openDoc(t, 'pasted.md', null, '', 'loose:pasted.md');
   });
-});
+}
 function copyPanel(text){
   var v = openPanel({
     title: 'Copy the Markdown',
@@ -2218,6 +2386,6 @@ docs.push({ key: 'sample', name: 'tutorial.md', path: '', label: 'tutorial.md', 
 activeDoc = 0;
 paintTitle();
 render();
-restoreFolder();
+restoreFolders();
 })();
 </script>

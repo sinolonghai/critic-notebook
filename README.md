@@ -23,10 +23,18 @@ edits text normally, and produces correct markup.
 
 ## Using it
 
-**Locally.** Download `index.html` and open it. In Chromium-based browsers, **Open folder**
-picks a folder once; every markdown file under it is listed in the left pane, and clicking one
-opens it. `⌘S` / `Ctrl+S` writes back to that file in place. The folder is remembered across
-reloads — on return the pane offers it, and one click re-grants permission.
+**Locally.** Download `index.html` and open it. There are two ways in:
+
+- **Open folder** — every markdown file under it is listed in the left pane; click one to open
+  it. Folders you have used are remembered across reloads, and one click re-grants permission.
+- **Open file** — one file on its own. The left pane then shows what is open plus the folders
+  you have used, so there is always a way back.
+
+A file opened or saved *inside* the connected folder stays in folder mode; one outside switches
+to file mode, and offers to open its folder first — the picker can be anchored at that file, so
+it is two clicks, and the full path comes back with it.
+
+`⌘S` / `Ctrl+S` writes the open file in place, and is disabled when there is nothing to write.
 
 Browsers never reveal a file's absolute path. But when the tool is opened as a local file and
 the folder you picked is the one the tool sits in, the page's own location supplies the prefix,
@@ -65,7 +73,7 @@ that block.
 | Jump between touched blocks | `↑ prev` / `next ↓` in the outline |
 | Fold a side pane | the two buttons at the top left |
 
-Set a name in the `as` field and your suggestions are attributed with `@name`; each author gets
+Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author gets
 a colour. The three view tabs show the document marked up, as the original, or as it would read
 with everything accepted.
 
