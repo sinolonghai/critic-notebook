@@ -143,7 +143,11 @@ button,input,textarea{font:inherit;color:inherit}
 .cta-row button{flex:1 1 auto;border:1px dashed var(--rule-strong);background:transparent;border-radius:7px;
   padding:7px 9px;cursor:pointer;font-size:12px;color:var(--ink-soft);white-space:nowrap}
 .cta-row button:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
-.doc-row .ico{flex:0 0 auto;font-size:9px;color:var(--ink-faint);font-family:var(--mono)}
+.doc-row .ico{flex:0 0 auto;font-size:9px;color:var(--ink-faint);font-family:var(--mono);width:9px}
+.doc-row.dir{color:var(--ink-soft)}
+.doc-row.dir .nm{font-weight:500}
+.doc-row.dir[aria-expanded="true"]{color:var(--ink)}
+.doc-row .cnt{flex:0 0 auto;font-family:var(--mono);font-size:10px;color:var(--ink-faint);opacity:.75}
 .doc-row.hist .nm{color:var(--ink-soft)}
 .doc-row.hist:hover .nm{color:var(--ink)}
 
@@ -1323,6 +1327,7 @@ function walkFolder(dir, prefix, depth, out){
 function useFolder(h, quiet){
   folder = { handle: h, name: h.name, abs: guessAbs(h.name) };
   files = [];
+  loadExpanded();
   paintDocList();
   rememberFolder(h);
   return walkFolder(h, '', 0, []).then(function(list){
@@ -1346,6 +1351,7 @@ function useFolder(h, quiet){
 function toFileMode(){
   folder = null;
   files = [];
+  currentEntry = null;
   paintTitle();
   paintDocList();
 }
@@ -1406,6 +1412,7 @@ function rememberFolder(h){
     if(i >= 0) folderHistory.splice(i, 1);
     folderHistory.unshift({ handle: h, name: h.name, ts: Date.now() });
     if(folderHistory.length > 8) folderHistory.length = 8;
+    currentEntry = folderHistory[0];
     paintDocList();
     return saveHistory();
   });
@@ -1435,6 +1442,79 @@ function pickFolder(anchor){
 }
 
 /* ===================== document list ===================== */
+/* Subfolders are collapsed until you open them: a flat dump of every markdown file under a
+   real project buries the two you care about. Expansion is remembered per folder. */
+var expanded = {};
+var currentEntry = null;   /* the folderHistory row for the connected folder */
+
+function expandKey(){ return 'cm-open-' + (folder ? folder.name : ''); }
+function loadExpanded(){
+  expanded = {};
+  try{
+    var raw = localStorage.getItem(expandKey());
+    if(raw) JSON.parse(raw).forEach(function(k){ expanded[k] = true; });
+  }catch(e){}
+}
+function saveExpanded(){
+  try{ localStorage.setItem(expandKey(), JSON.stringify(Object.keys(expanded))); }catch(e){}
+}
+function expandTo(path){
+  if(!path) return;
+  var parts = path.split('/'); parts.pop();
+  var acc = '';
+  parts.forEach(function(seg){ acc += seg + '/'; expanded[acc] = true; });
+}
+
+function buildTree(){
+  var root = { name: folder ? folder.name : '', path: '', dirs: [], files: [], map: {} };
+  files.forEach(function(f){
+    var node = root;
+    if(f.dir){
+      var acc = '';
+      f.dir.replace(/\/$/, '').split('/').forEach(function(seg){
+        acc += seg + '/';
+        if(!node.map[seg]){
+          var kid = { name: seg, path: acc, dirs: [], files: [], map: {} };
+          node.map[seg] = kid; node.dirs.push(kid);
+        }
+        node = node.map[seg];
+      });
+    }
+    node.files.push(f);
+  });
+  return root;
+}
+function nodeStats(node){
+  var n = node.files.length, c = 0;
+  node.files.forEach(function(f){ c += fileCount(f) || 0; });
+  node.dirs.forEach(function(d){ var st = nodeStats(d); n += st.n; c += st.c; });
+  return { n: n, c: c };
+}
+function renderNode(node, depth){
+  var html = '';
+  node.dirs.forEach(function(d){
+    var open = !!expanded[d.path], st = nodeStats(d);
+    html += '<button type="button" class="doc-row dir" data-dir="' + esc(d.path) + '"' +
+      ' aria-expanded="' + open + '" style="padding-left:' + (8 + depth * 13) + 'px">' +
+      '<span class="ico">' + (open ? '▾' : '▸') + '</span>' +
+      '<span class="nm">' + esc(d.name) + '</span>' +
+      (st.c ? '<span class="badge">' + st.c + '</span>' : '') +
+      '<span class="cnt">' + st.n + '</span></button>';
+    if(open) html += renderNode(d, depth + 1);
+  });
+  node.files.forEach(function(f){
+    var i = findDoc(f.key);
+    /* an empty gutter where a folder's chevron would be, so names line up at every level */
+    html += '<button type="button" class="doc-row" data-key="' + esc(f.key) + '"' +
+      ' aria-current="' + (i >= 0 && i === activeDoc) + '"' +
+      ' style="padding-left:' + (8 + depth * 13) + 'px">' +
+      '<span class="ico"></span><span class="nm">' + esc(f.name) + '</span>' +
+      (fileCount(f) ? '<span class="badge">' + fileCount(f) + '</span>' : '') +
+      (fileDirty(f) ? '<span class="udot" title="unsaved">●</span>' : '') + '</button>';
+  });
+  return html;
+}
+
 function fileCount(f){
   var i = findDoc(f.key);
   if(i < 0) return f.scanned ? f.count : null;
@@ -1470,40 +1550,28 @@ function paintDocList(){
       esc(folder.name) + '</span>' +
       '<button type="button" data-act2="refresh" title="Rescan the folder" aria-label="Rescan">⟳</button>' +
       '<button type="button" data-act2="pick" title="Open a different folder" aria-label="Open another folder">…</button></div>';
-    if(!files.length){
-      html += '<div class="pane-empty">No markdown files found in this folder.</div>';
-    } else {
-      var lastDir = null;
-      files.forEach(function(f){
-        if(f.dir !== lastDir){
-          lastDir = f.dir;
-          html += '<div class="grp" title="' + esc(f.dir || folder.name) + '">' +
-            esc(f.dir ? shortPath(f.dir.replace(/\/$/, ''), 26) : './') + '</div>';
-        }
-        var i = findDoc(f.key);
-        html += rowHtml(f.name, f.key, fileCount(f), fileDirty(f), i >= 0 && i === activeDoc);
-      });
-    }
+    html += files.length ? renderNode(buildTree(), 0)
+                         : '<div class="pane-empty">No markdown files found in this folder.</div>';
     /* a document open but not inside this folder must stay visible — hiding one with
        unsaved changes is how work gets lost */
     var outside = docs.filter(function(r){ return !r.path; });
-    if(outside.length){
-      html += '<div class="grp">not in this folder</div>' + docRows(outside);
-    }
+    if(outside.length) html += '<div class="grp">not in this folder</div>' + docRows(outside);
   } else {
     html += '<div class="grp">open</div>' + docRows(docs);
-    if(folderHistory.length){
-      html += '<div class="grp">recent folders</div>' +
-        folderHistory.map(function(e, i){
-          return '<button type="button" class="doc-row hist" data-hist="' + i + '" aria-current="false">' +
-            '<span class="ico">▸</span><span class="nm">' + esc(e.name) + '</span></button>';
-        }).join('');
-    }
-    html += '<div class="cta-row">' +
-      (CAN_DIR ? '<button type="button" data-act2="pick">Open folder</button>' : '') +
-      '<button type="button" data-act2="file">Open file</button>' +
-      '<button type="button" data-act2="paste">Paste</button></div>';
   }
+
+  var hist = folderHistory.filter(function(e){ return e !== currentEntry; });
+  if(hist.length){
+    html += '<div class="grp">recent folders</div>' +
+      hist.map(function(e){
+        return '<button type="button" class="doc-row hist" data-hist="' + folderHistory.indexOf(e) + '">' +
+          '<span class="ico">▸</span><span class="nm">' + esc(e.name) + '</span></button>';
+      }).join('');
+  }
+  html += '<div class="cta-row">' +
+    (CAN_DIR ? '<button type="button" data-act2="pick">Open folder</button>' : '') +
+    '<button type="button" data-act2="file">Open file</button>' +
+    '<button type="button" data-act2="paste">Paste</button></div>';
 
   host.innerHTML = html;
   document.getElementById('doc-ct').textContent = folder ? (files.length || '') : (docs.length || '');
@@ -1945,6 +2013,7 @@ function activate(i){
   openCell = null; insertAt = null; draft = ''; draftBase = ''; rowCache = []; lit = null;
   hidePop();
   pruneSample();
+  if(r.path){ expandTo(r.path); saveExpanded(); }
   paintTitle();
   render();
   center.scrollTop = r.scrollTop || 0;
@@ -2032,6 +2101,14 @@ document.getElementById('doclist').addEventListener('click', function(ev){
       files.forEach(function(f){ f.scanned = false; });
       useFolder(folder.handle, true);
     }
+    return;
+  }
+  var db = ev.target.closest('button[data-dir]');
+  if(db){
+    var k = db.dataset.dir;
+    if(expanded[k]) delete expanded[k]; else expanded[k] = true;
+    saveExpanded();
+    paintDocList();
     return;
   }
   var hb = ev.target.closest('button[data-hist]');

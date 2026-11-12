@@ -25,8 +25,10 @@ edits text normally, and produces correct markup.
 
 **Locally.** Download `index.html` and open it. There are two ways in:
 
-- **Open folder** — every markdown file under it is listed in the left pane; click one to open
-  it. Folders you have used are remembered across reloads, and one click re-grants permission.
+- **Open folder** — the left pane shows it as a tree. Subfolders start collapsed, with the
+  number of files and of open suggestions beneath them, so a large project does not bury the
+  two files you came for; expansion is remembered per folder. Folders you have used stay
+  listed in both modes, and one click re-grants permission after a reload.
 - **Open file** — one file on its own. The left pane then shows what is open plus the folders
   you have used, so there is always a way back.
 
