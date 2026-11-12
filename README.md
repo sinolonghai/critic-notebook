@@ -154,6 +154,31 @@ MultiMarkdown Composer uses, since CriticMarkup itself has no author field.
 The page opens on a built-in tutorial. It is a scratch pad: it has no file behind it, so
 `Save` stays disabled on it and `Save as…` is the way to keep anything you tried there.
 
+## What it remembers, and where
+
+Everything persists in the browser's own storage for the page's origin. Nothing is written
+beside your documents, and none of it leaves the machine.
+
+| Where | Key | What |
+| --- | --- | --- |
+| `localStorage` | `cm-author` | the **Sign as** name |
+| | `cm-pane-side`, `cm-pane-out` | whether each side pane is open |
+| | `cm-open-<folder>` | which subfolders are expanded, per folder |
+| | `cm-signhint` | whether the one-time "sign your suggestions" note has shown |
+| IndexedDB `critic-notebook` → `kv` | `folders` | folder history: handles, names, last-used |
+| | `dir` | the single folder an earlier version stored, kept for migration |
+
+Two stores because `localStorage` holds only strings, and a `FileSystemDirectoryHandle`
+cannot be turned into one — it survives only through structured clone, which is IndexedDB's
+to offer. That handle is what lets a remembered folder be reopened with one permission click
+instead of being picked again.
+
+Folder history keeps the **8 most recent**; older entries fall off the end. Expansion state
+for folders no longer in that history is pruned with it, so the keys do not accumulate.
+
+In Chrome every `file://` page shares one storage bucket, so moving `index.html` to another
+directory keeps all of it. Clearing site data, or a private window, starts over.
+
 ## Known limits
 
 - **Code blocks are not tracked.** CriticMarkup inside a fence is never parsed, so marking one

@@ -143,10 +143,14 @@ button,input,textarea{font:inherit;color:inherit}
 .cta-row button{flex:1 1 auto;border:1px dashed var(--rule-strong);background:transparent;border-radius:7px;
   padding:7px 9px;cursor:pointer;font-size:12px;color:var(--ink-soft);white-space:nowrap}
 .cta-row button:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
-.doc-row .ico{flex:0 0 auto;font-size:9px;color:var(--ink-faint);font-family:var(--mono);width:9px}
-.doc-row.dir{color:var(--ink-soft)}
+.doc-row .ico{flex:0 0 auto;display:inline-flex;align-items:center;width:13px;height:13px;color:var(--ink-faint)}
+.doc-row .ico svg{display:block}
+.doc-row .ico.doc{color:var(--rule-strong)}
+.doc-row:hover .ico.doc,.doc-row[aria-current="true"] .ico.doc{color:var(--ink-faint)}
 .doc-row.dir .nm{font-weight:500}
-.doc-row.dir[aria-expanded="true"]{color:var(--ink)}
+.doc-row.dir .ico{color:var(--ink-soft)}
+.doc-row.dir[aria-expanded="true"] .ico{color:var(--accent)}
+.doc-row.hist .ico{color:var(--ink-faint);opacity:.7}
 .doc-row .cnt{flex:0 0 auto;font-family:var(--mono);font-size:10px;color:var(--ink-faint);opacity:.75}
 .doc-row.hist .nm{color:var(--ink-soft)}
 .doc-row.hist:hover .nm{color:var(--ink)}
@@ -1393,6 +1397,17 @@ function scanCounts(){
 
 /* ---------- folder history ---------- */
 function saveHistory(){
+  /* expansion state is keyed by folder name and would otherwise accumulate a key per folder
+     ever opened; drop the ones no history entry can reach */
+  try{
+    var live = {};
+    folderHistory.forEach(function(e){ live['cm-open-' + e.name] = 1; });
+    if(folder) live['cm-open-' + folder.name] = 1;
+    for(var i = localStorage.length - 1; i >= 0; i--){
+      var k = localStorage.key(i);
+      if(k && k.indexOf('cm-open-') === 0 && !live[k]) localStorage.removeItem(k);
+    }
+  }catch(e){}
   return idbSet('folders', folderHistory.map(function(e){
     return { handle: e.handle, name: e.name, ts: e.ts };
   }));
@@ -1465,6 +1480,15 @@ function expandTo(path){
   parts.forEach(function(seg){ acc += seg + '/'; expanded[acc] = true; });
 }
 
+var ICO_DIR = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">' +
+  '<path fill="currentColor" d="M1.6 3.4c0-.7.5-1.2 1.2-1.2h3c.4 0 .7.2.9.5l.8 1.1h5.7c.7 0 1.2.5 1.2 1.2v7c0 .7-.5 1.2-1.2 1.2H2.8c-.7 0-1.2-.5-1.2-1.2V3.4z"/></svg>';
+var ICO_DIR_OPEN = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">' +
+  '<path fill="currentColor" d="M1.6 3.4c0-.7.5-1.2 1.2-1.2h3c.4 0 .7.2.9.5l.8 1.1h5.7c.7 0 1.2.5 1.2 1.2v1.1H1.6V3.4z"/>' +
+  '<path fill="currentColor" opacity=".55" d="M1.6 6.7h13.1l-1.3 5.6c-.1.6-.6 1-1.2 1H2.8c-.7 0-1.2-.5-1.2-1.2V6.7z"/></svg>';
+var ICO_DOC = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">' +
+  '<path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" d="M4.2 2.3h4.3L11.8 5.6v8.1H4.2z"/>' +
+  '<path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" d="M8.4 2.4v3.3h3.3"/></svg>';
+
 function buildTree(){
   var root = { name: folder ? folder.name : '', path: '', dirs: [], files: [], map: {} };
   files.forEach(function(f){
@@ -1491,26 +1515,27 @@ function nodeStats(node){
   return { n: n, c: c };
 }
 function renderNode(node, depth){
-  var html = '';
+  var pad = 8 + depth * 14, html = '';
+  /* files first: in a document folder the files are the point, the subfolders are where you
+     go next */
+  node.files.forEach(function(f){
+    var i = findDoc(f.key), cnt = fileCount(f);
+    html += '<button type="button" class="doc-row file" data-key="' + esc(f.key) + '"' +
+      ' aria-current="' + (i >= 0 && i === activeDoc) + '" style="padding-left:' + pad + 'px">' +
+      '<span class="ico doc">' + ICO_DOC + '</span>' +
+      '<span class="nm">' + esc(f.name) + '</span>' +
+      (cnt ? '<span class="badge">' + cnt + '</span>' : '') +
+      (fileDirty(f) ? '<span class="udot" title="unsaved">●</span>' : '') + '</button>';
+  });
   node.dirs.forEach(function(d){
     var open = !!expanded[d.path], st = nodeStats(d);
     html += '<button type="button" class="doc-row dir" data-dir="' + esc(d.path) + '"' +
-      ' aria-expanded="' + open + '" style="padding-left:' + (8 + depth * 13) + 'px">' +
-      '<span class="ico">' + (open ? '▾' : '▸') + '</span>' +
+      ' aria-expanded="' + open + '" style="padding-left:' + pad + 'px">' +
+      '<span class="ico">' + (open ? ICO_DIR_OPEN : ICO_DIR) + '</span>' +
       '<span class="nm">' + esc(d.name) + '</span>' +
       (st.c ? '<span class="badge">' + st.c + '</span>' : '') +
       '<span class="cnt">' + st.n + '</span></button>';
     if(open) html += renderNode(d, depth + 1);
-  });
-  node.files.forEach(function(f){
-    var i = findDoc(f.key);
-    /* an empty gutter where a folder's chevron would be, so names line up at every level */
-    html += '<button type="button" class="doc-row" data-key="' + esc(f.key) + '"' +
-      ' aria-current="' + (i >= 0 && i === activeDoc) + '"' +
-      ' style="padding-left:' + (8 + depth * 13) + 'px">' +
-      '<span class="ico"></span><span class="nm">' + esc(f.name) + '</span>' +
-      (fileCount(f) ? '<span class="badge">' + fileCount(f) + '</span>' : '') +
-      (fileDirty(f) ? '<span class="udot" title="unsaved">●</span>' : '') + '</button>';
   });
   return html;
 }
@@ -1565,7 +1590,7 @@ function paintDocList(){
     html += '<div class="grp">recent folders</div>' +
       hist.map(function(e){
         return '<button type="button" class="doc-row hist" data-hist="' + folderHistory.indexOf(e) + '">' +
-          '<span class="ico">▸</span><span class="nm">' + esc(e.name) + '</span></button>';
+          '<span class="ico">' + ICO_DIR + '</span><span class="nm">' + esc(e.name) + '</span></button>';
       }).join('');
   }
   html += '<div class="cta-row">' +
