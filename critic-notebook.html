@@ -2642,8 +2642,10 @@ function guardDirty(next){
 var topLevel = (function(){ try{ return window.self === window.top; }catch(e){ return false; } })();
 var CAN_FS = topLevel && typeof window.showSaveFilePicker === 'function';
 var CAN_DIR = topLevel && typeof window.showDirectoryPicker === 'function';
-var CAN_DL = topLevel && (location.protocol === 'file:' ||
-             /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname));
+/* A blob download works from any origin the browser trusts, not just a local file — this
+   used to name localhost explicitly, which left a Firefox or Safari visitor to a hosted copy
+   with Copy as the only way to get their edits out. */
+var CAN_DL = topLevel && (location.protocol === 'file:' || window.isSecureContext);
 var SAVE_LABEL = CAN_FS ? 'Save' : CAN_DL ? 'Download' : 'Copy';
 document.getElementById('btn-save').textContent = SAVE_LABEL;
 document.getElementById('btn-save').title =

@@ -18,6 +18,15 @@
   the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
   GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
   quirks mode shifts content about 3px; nothing else moves.
+- README gains a prompt for having a model mark a document up in CriticMarkup, and the one
+  check worth doing on what comes back: the **Original** view should read as the document you
+  started with, because an edit made outside a mark destroys the original silently. The prompt
+  is tested rather than asserted — its output is parsed by the real page and asserted to
+  reject back to the source file byte for byte.
+- Saving works from a hosted copy in browsers without the File System Access API. The download
+  path tested for `file://` or localhost by name, so a Firefox or Safari visitor to a project
+  page was offered Copy and nothing else; it now asks the browser whether the origin is
+  trusted. An `index.html` redirects to the tool, since GitHub Pages serves the site root.
 - The cell editor turns the browser's spell checker back on. It holds prose — the marks are
   resolved away before the text reaches it — so underlines land on words rather than on
   CriticMarkup delimiters. The paste and export boxes, which hold raw markdown, keep it off.

@@ -190,6 +190,44 @@ sentence five times still produces one clean `{~~old~>new~~}` rather than five n
 The diff is word-level for Latin scripts and character-level for CJK, so changing two characters
 in a Chinese paragraph marks two characters.
 
+## Having a model mark up the changes
+
+The editor does not care who wrote the marks. A model can produce them, and the document then
+arrives as a list of suggestions to take or drop one at a time — which beats reading the new
+version straight through and hoping you notice what moved.
+
+Give the model the document and this:
+
+```text
+Mark up this Markdown document with tracked changes in CriticMarkup, so that a human can
+accept or reject each change separately. Return the complete document and nothing else —
+no preamble, no summary, no diff.
+
+1. Every character you are not changing must come through byte-identical. Do not rewrap
+   lines, do not normalise quotes or dashes, do not reformat tables. Anything outside a
+   mark is read as the original text, so an unmarked change is an invisible one.
+2. Use only these marks:
+       {--deleted--}  {++inserted++}  {~~old~>new~~}  {>>comment<<}  {==highlight==}
+3. Mark the smallest span that carries the change. A replaced word is {~~word~>better~~},
+   not a rewritten sentence — the reviewer has to see what moved.
+4. Never nest one mark inside another.
+5. Never put a mark inside a fenced code block or inline code. Leave code alone.
+6. When you add or remove a whole paragraph, list item or heading, the line breaks that
+   separate it from its neighbours go INSIDE the mark. A newline left outside is read as
+   original text and adds a blank line the author never wrote.
+7. Put a comment immediately after the mark it explains, and sign it:
+   {~~a~>b~~}{>>@ai: b is the term section 3 uses<<}
+8. Where you are unsure, leave a comment rather than silently making the change.
+```
+
+Save what comes back as a `.md` and open it, or paste it in with **Paste** in the left pane.
+
+**Check rule 1 was obeyed before trusting the rest.** Switch to **Original**: that view
+resolves every mark back to the text it replaced, so it should read as the document you
+started with. If a sentence there is wrong, the model changed something outside a mark — the
+original is gone from the file and rejecting no longer recovers it. Rule 1 is first because it
+is the only one whose breach is silent.
+
 ## Comparing two versions
 
 The **Compare** tab diffs the open document against another one — a different file, or an
@@ -326,8 +364,12 @@ instead of being picked again.
 Folder history keeps the **8 most recent**; older entries fall off the end. Expansion state
 for folders no longer in that history is pruned with it, so the keys do not accumulate.
 
-In Chrome every `file://` page shares one storage bucket, so moving `critic-notebook.html` to another
-directory keeps all of it. Clearing site data, or a private window, starts over.
+In Chrome every `file://` page shares one storage bucket, so moving `critic-notebook.html` to
+another directory keeps all of it — and so would any other local HTML file you ever open, which
+is why nothing worth protecting is kept here. A copy served over `https://` gets its own origin
+instead, separate from the local one and from other people's sites, which means a hosted copy
+and a downloaded copy do not share a folder history. Clearing site data, or a private window,
+starts over.
 
 ## To do
 
