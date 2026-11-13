@@ -209,7 +209,7 @@ Gemini, whichever you use — can produce them, and the document then arrives as
 suggestions to take or drop one at a time, which beats reading the new version straight
 through and hoping you notice what moved.
 
-Give it the document and this:
+Give the AI assistant the document and this prompt:
 
 ```text
 Mark up this Markdown document with tracked changes in CriticMarkup, so that a human can
