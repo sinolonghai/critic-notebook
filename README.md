@@ -10,6 +10,10 @@ One HTML file. No install, no build, no server, no dependencies. Open it in a br
 What you changed is recorded as [CriticMarkup](http://criticmarkup.com/) inside the Markdown
 itself, so the revisions travel with the file and stay readable in any editor.
 
+![Editing a paragraph in place: two words are retyped, the word-level diff appears under the
+editor as it is typed, and committing leaves a tracked suggestion in the prose with accept and
+reject buttons beside it.](media/demo.gif)
+
 > **Use Chrome or Edge.** Opening a folder and saving back to the file you opened rely on the
 > File System Access API, which exists only in Chromium. Firefox and Safari still open, edit,
 > comment and export — one file at a time, saving as a download. See

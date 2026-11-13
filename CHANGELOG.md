@@ -25,6 +25,8 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
+- README opens with a recording of the loop it describes — edit a paragraph as prose, watch
+  the word diff form under the editor, commit, accept.
 - README gains a prompt for having an AI mark a document up in CriticMarkup, and the one
   check worth doing on what comes back: the **Original** view should read as the document you
   started with, because an edit made outside a mark destroys the original silently. The prompt
