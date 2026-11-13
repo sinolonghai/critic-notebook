@@ -243,6 +243,33 @@ if (/\n{3,}/.test(accepted) || /\n{3,}/.test(rejected)) {
   warn('blank runs of three or more newlines appear after accepting or rejecting; the marks are\n' +
        '      probably sitting around the line breaks rather than inside them (rule 6).');
 }
+/* Rule 3 measured properly. Length alone misses the common case: a replacement whose two
+   sides share most of their text, so the mark drags unchanged words along with the changed
+   ones. The page shows an existing replacement as the whole old text struck through beside
+   the whole new text — it word-diffs only while you are editing — so the reader is left to
+   find the difference. Stripping the shared prefix and suffix says how much of the mark is
+   actually doing work. */
+function slack(m){
+  const a = m.rem || '', b = m.add || '';
+  let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let q = 0; while (q < a.length - p && q < b.length - p &&
+                    a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
+  const shared = p + q, total = Math.max(a.length, b.length);
+  return { shared, total, core: total - shared };
+}
+const baggy = subs.map(m => ({ m, s: slack(m) }))
+                  .filter(x => x.s.total >= 24 && x.s.shared > x.s.core * 1.5)
+                  .sort((x, y) => y.s.shared - x.s.shared);
+if (baggy.length) {
+  const w = baggy[0];
+  warn(`${baggy.length} replacement${baggy.length === 1 ? '' : 's'} carry text that did not change. ` +
+       `The widest keeps ${w.s.shared} of\n      ${w.s.total} characters identical on both sides, ` +
+       `so only ${w.s.core} of it is the edit: ` +
+       JSON.stringify((w.m.rem || '').slice(0, 56)) + `\n      → ` +
+       JSON.stringify((w.m.add || '').slice(0, 56)) +
+       `\n      The page strikes the whole old text beside the whole new text, leaving the reader` +
+       `\n      to find the difference. A narrower mark shows it (rule 3).`);
+}
 const odd = names.filter(n => !/^[\w.\-\u3000-\u9fff]+$/.test(n));
 if (odd.length) {
   warn(`the author name${odd.length === 1 ? '' : 's'} ${odd.map(n => JSON.stringify('@' + n)).join(', ')} ` +

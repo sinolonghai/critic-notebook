@@ -133,6 +133,47 @@ markup is safe to review, not whether the review is any good. Everything above a
 quality of the edits came from checking the claims by hand. The judge would have passed an
 assistant that marked up the document impeccably and said nothing worth reading.
 
+### Tencent WorkBuddy + DeepSeek 4.1 Flash, 2026-11-13, English document
+
+Passes, two warnings. 14 marks on `samples/review-me.md` — 5 replacements, 2 highlights, 7
+comments.
+
+**Rule 5 held.** The python fence came through byte for byte, which is the first time any run
+has been tested on it; the Chinese document has no code in it. A model asked to review a
+document is sorely tempted to improve the code in it, and this one left it alone.
+
+Six of its seven edits are good, two of them sharp:
+
+- It challenged "It is not a recommendation yet" by pointing at two places where the note
+  does argue for B — the blockquote calling case 3 "the argument against patching", and the
+  runtime section calling the check "most of the argument for B". The document claims a
+  neutrality it does not keep, and noticing that is a reading of the whole thing, not a line.
+- "Three distinct failures are being reported as one alert" is wrong on the document's own
+  terms: item 3 says nothing alerts on it. Two reach the alert, not three.
+- It also caught `not detected` sitting in a *Time to recover* column, which answers a
+  different question than the column asks, and `six-week project` where the estimate above
+  is six to eight.
+
+**The seventh is the first edit in any run that a reviewer should reject.** It cut "story"
+from "keeps the deployment story unchanged" as adding nothing. But "deployment story" is
+idiomatic for the whole business of how a thing ships, and "keeps the deployment unchanged"
+is a narrower and stronger claim than the author made. Which is the argument for the tool
+rather than against the model: it does not need the assistant to be right, only legible
+enough to be told no.
+
+**Granularity went from 16 characters per edit on the Chinese document to 65 here**, same
+harness and model. The new rule-3 check explains it: four of the five replacements carry text
+that did not change, the widest keeping 37 of 47 characters identical on both sides to change
+`the number` into `what`. Whether this is about English having word boundaries to be lazy
+with, or about these particular edits being rephrasings, one run cannot say.
+
+That check is the fourth measurement the judge gained from being used, and the first that
+raw length could never have caught: 88 characters is nowhere near the 400 that warned about
+coarseness, and the mark was still mostly ballast. What matters is how much of a replacement
+is identical on both sides, because the page strikes the whole old text beside the whole new
+text — it word-diffs only while you are editing — so a baggy mark leaves the reader hunting
+for the difference.
+
 ### Still to run
 
 ChatGPT (Code Interpreter and Canvas separately — Canvas is an editing surface and may
