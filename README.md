@@ -73,13 +73,11 @@ better, because then the title bar can show full paths.
 ### From the command line
 
 ```sh
-# public repo
 curl -O https://raw.githubusercontent.com/sinolonghai/critic-notebook/main/critic-notebook.html
-
-# while the repo is private, through the GitHub CLI
-gh api repos/sinolonghai/critic-notebook/contents/critic-notebook.html \
-  --jq '.content' | base64 -d > critic-notebook.html
 ```
+
+That URL is for downloading, not for opening: GitHub serves it as `text/plain` with
+`nosniff`, so a browser pointed at it shows the source rather than running the page.
 
 Or clone the whole thing, if you also want the samples and tests:
 
@@ -387,6 +385,27 @@ Putting the model back inside that step undoes it.
   comment text is preserved and moved to the end of the block.
 - **Tables are edited as Markdown source**, pipes and all, not as a grid.
 - No real-time collaboration. Two people reviewing the same file exchange the file.
+
+## Problems and questions
+
+[Open an issue](https://github.com/sinolonghai/critic-notebook/issues). Neither side has to
+hand over an email address for that, and the thread stays where the next person with the same
+problem will find it.
+
+What helps, in rough order:
+
+- **The browser and the operating system.** Nearly every difference in behaviour so far has
+  come from the File System Access API, which only Chromium has.
+- **The smallest Markdown that still goes wrong.** This is a tool for reviewing documents, so
+  the file that broke it is often one you cannot share. Cut it down until only the few lines
+  that still reproduce the problem are left, and paste those — a heading and two paragraphs is
+  usually enough, and it is a faster way to find the cause than the whole document would be.
+- **What you expected instead.** Several past bugs were cases where the output was defensible
+  and still not what anyone wanted.
+
+If you hit something where accepting or rejecting a suggestion gives back the wrong original
+text, say so plainly in the title. That is the one property everything else is built on, and
+it takes priority over anything cosmetic.
 
 ## License
 
