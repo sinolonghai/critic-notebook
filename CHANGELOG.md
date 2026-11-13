@@ -18,6 +18,9 @@
   the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
   GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
   quirks mode shifts content about 3px; nothing else moves.
+- The cell editor turns the browser's spell checker back on. It holds prose — the marks are
+  resolved away before the text reaches it — so underlines land on words rather than on
+  CriticMarkup delimiters. The paste and export boxes, which hold raw markdown, keep it off.
 - README gains a **To do** section recording what is planned and what makes each piece hard,
   and a **Why** that starts from the case this tool exists for: an AI edits a Markdown document
   and a human has to see what it changed.

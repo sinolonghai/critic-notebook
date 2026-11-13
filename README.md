@@ -173,6 +173,20 @@ that block.
 Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author
 gets a colour.
 
+### Spelling and grammar
+
+The cell editor is an ordinary text box with the browser's spell checker turned on, so
+misspellings are underlined and right-click offers corrections, the same as anywhere else.
+Chrome's basic check runs locally; its *enhanced* mode sends what you type to Google, which is
+a browser setting worth knowing about if the document is confidential.
+
+For grammar there is nothing to install here either: Grammarly, LanguageTool and the like work
+in any text box, including this one. Opening the tool as a local file is the one catch — an
+extension has to be allowed to run on `file://` pages, which is a switch on the extension's own
+settings page, off by default.
+
+### How edits are recorded
+
 Edits are diffed against the **original**, not against your previous edit, so changing the same
 sentence five times still produces one clean `{~~old~>new~~}` rather than five nested layers.
 The diff is word-level for Latin scripts and character-level for CJK, so changing two characters
@@ -349,6 +363,17 @@ dev dependency, so the test files would need to skip cleanly when it is absent.
 handle on the repository and browsers now decompress zlib natively. Loose objects are easy;
 packfiles are not, and a reader that handled only loose objects would work on a fresh repo and
 quietly stop after the first `git gc` — which is worse than not having it.
+
+**AI assistance in the editor**, listed last because the first question is whether it belongs
+here at all. A browser can call a model API perfectly well; what it cannot do is hold the key
+safely. A single local file has only `localStorage`, and in Chrome every `file://` page shares
+one store — so any other local HTML file you ever open could read it. That argues for an
+optional localhost helper holding the key, with the page degrading to no AI button when it is
+not running, at the cost of this no longer being a thing you download and double-click. The
+deeper objection is that this tool is a reviewing surface, not a writing one: the model already
+works upstream, through CriticMarkup it writes or a second version to compare against, and the
+reason the tool exists is that a human should be the one reading what the model changed.
+Putting the model back inside that step undoes it.
 
 ## Known limits
 

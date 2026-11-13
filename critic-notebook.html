@@ -1270,7 +1270,10 @@ function editorHtml(kind, idx){
     hint = 'new block · <kbd>' + ENTER + '</kbd> or click away · <kbd>Esc</kbd> to discard';
   }
   return '<div class="ed" data-ed="' + kind + '">' +
-    '<textarea id="edbox" spellcheck="false" aria-label="Block text"></textarea>' +
+    /* A cell editor holds prose, not markup — the marks are resolved away before the text
+       reaches it — so the browser's own spell checker is useful here and only here. The raw
+       markdown in the paste and export boxes keeps it off. */
+    '<textarea id="edbox" spellcheck="true" aria-label="Block text"></textarea>' +
     '<div class="edbar"><span class="hint">' + hint + '</span>' +
       '<button type="button" data-edact="discard">Discard</button></div>' +
     '<div class="prev">' + previewHtml(kind, idx) + '</div></div>';
