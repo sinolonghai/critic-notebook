@@ -2,7 +2,8 @@
 
 **0.1.0** · [changelog](CHANGELOG.md)
 
-Review Markdown the way you'd review a document — but keep the revisions in the file.
+**A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
+but keep the revisions in the file.
 
 One HTML file. No install, no build, no server, no dependencies. Open it in a browser, open a
 `.md`, and every block of the document becomes a cell you can click and rewrite in plain prose.
@@ -58,6 +59,17 @@ double-click it, and click a paragraph to change it.
 
 The whole program is one file: **`critic-notebook.html`**. You do not need git, Node, or an
 account to use it — only to run the tests.
+
+### Without downloading anything
+
+**<https://sinolonghai.github.io/critic-notebook/>** is the same file, served from this
+repository. Open it and it works exactly as the downloaded copy does, including opening a
+folder and saving back to it — the page makes no network requests of its own, so documents
+you open stay on your machine either way.
+
+The one difference is bookkeeping: a hosted page and a local file are separate origins to the
+browser, so the folder history and the **Sign as** name do not carry between them. Send this
+link to someone who should not have to think about any of the above.
 
 ### From the GitHub page
 
