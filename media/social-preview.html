@@ -1,0 +1,105 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<!-- Source for media/social-preview.png, the card GitHub shows when the repository is
+     linked anywhere (Settings -> General -> Social preview).
+
+     Regenerate after changing the name, the URL or the mark colours:
+       open this file at a 1280x640 viewport and screenshot it at 2x, e.g.
+       npx playwright screenshot --viewport-size=1280,640 --device-scale-factor=2 \
+         media/social-preview.html media/social-preview.png
+
+     The colours and the mark styles are copied from critic-notebook.html so the card
+     looks like the thing it advertises. Fonts fall back gracefully if IBM Plex and
+     Source Serif 4 are not installed, but the committed PNG was made with them. -->
+<style>
+:root{
+  --paper:#f5f7f9; --surface:#fff; --surface-2:#eef1f5;
+  --ink:#16202e; --ink-soft:#5b6779; --ink-faint:#8b96a6;
+  --rule:#dde2ea; --rule-strong:#c3ccd9; --accent:#1f4d8f;
+  --ins:#0f7a52; --ins-bg:rgba(15,122,82,.13); --ins-line:rgba(15,122,82,.45);
+  --del:#ad382c; --del-bg:rgba(173,56,44,.13); --del-line:rgba(173,56,44,.45);
+  --note:#8a5a00; --note-bg:rgba(138,90,0,.13);
+  --ui:"IBM Plex Sans",system-ui,sans-serif; --doc:"Source Serif 4",Georgia,serif;
+  --mono:"IBM Plex Mono",monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{width:1280px;height:640px;background:var(--paper);color:var(--ink);
+  font-family:var(--ui);display:flex;flex-direction:column;justify-content:space-between;
+  padding:58px 74px 46px;overflow:hidden;position:relative}
+/* the three mark colours as a hairline across the top, the only ornament */
+body::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;
+  background:linear-gradient(90deg,var(--del) 0 30%,var(--ins) 30% 62%,var(--note) 62% 100%)}
+
+h1{font-size:62px;font-weight:600;letter-spacing:-.025em;line-height:1}
+.tag{margin-top:14px;font-size:30px;font-weight:400;color:var(--ink-soft);letter-spacing:-.01em}
+.tag b{color:var(--ink);font-weight:600}
+.lede{margin-top:13px;font-size:20px;color:var(--ink-soft);line-height:1.5;max-width:46rem}
+.lede b{color:var(--ink);font-weight:600}
+.chips{display:flex;gap:9px;margin-top:20px}
+.chips span{font-family:var(--mono);font-size:14px;color:var(--ink-faint);
+  border:1px solid var(--rule-strong);border-radius:999px;padding:5px 13px}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:13px;
+  box-shadow:0 1px 2px rgba(22,32,46,.06),0 10px 30px rgba(22,32,46,.09);
+  padding:26px 30px 22px;display:flex;gap:18px}
+.rail{flex:0 0 auto;width:3px;border-radius:2px;background:var(--note)}
+.inner{flex:1;min-width:0}
+.prose{font-family:var(--doc);font-size:30px;line-height:1.6;letter-spacing:-.005em}
+.cm{border-radius:3px;padding:.04em .1em}
+.ins{color:var(--ins);background:var(--ins-bg);text-decoration:underline;
+  text-decoration-color:var(--ins-line);text-decoration-thickness:2px;text-underline-offset:3px}
+.del{color:var(--del);background:var(--del-bg);text-decoration:line-through;
+  text-decoration-color:var(--del-line);text-decoration-thickness:2px}
+.row{display:flex;align-items:center;gap:13px;margin-top:17px;padding:9px 13px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:9px;position:relative}
+.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:9px 0 0 9px;
+  background:linear-gradient(var(--del) 50%,var(--ins) 50%)}
+.chip{font-size:13px;font-weight:600;letter-spacing:.04em;padding:4px 10px;border-radius:5px;
+  background:var(--surface-2);color:var(--ink-soft)}
+.txt{flex:1;font-family:var(--doc);font-size:21px}
+.was{color:var(--del);text-decoration:line-through}
+.arrow{color:var(--ink-faint);font-family:var(--mono);font-size:16px;margin:0 9px}
+.now{color:var(--ins)}
+.who{font-size:15px;color:var(--ink-faint);display:flex;align-items:center;gap:7px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--ins)}
+.ops{display:flex;gap:7px}
+.ops i{width:38px;height:33px;border:1px solid var(--rule-strong);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-style:normal;font-size:17px;color:var(--ink-soft)}
+
+.foot{display:flex;align-items:baseline;justify-content:space-between}
+.url{font-family:var(--mono);font-size:17px;color:var(--accent)}
+.sub{font-size:17px;color:var(--ink-faint)}
+</style></head><body>
+
+<div>
+  <h1>critic-notebook</h1>
+  <p class="tag">A Markdown editor with <b>tracked changes</b></p>
+  <p class="lede">See exactly what an AI changed, and <b>take it or drop it a paragraph at a time</b>.</p>
+  <div class="chips"><span>one HTML file</span><span>no install</span><span>works offline</span></div>
+</div>
+
+<div class="card">
+  <div class="rail"></div>
+  <div class="inner">
+    <div class="prose">The migration finished
+      <span class="cm del">three</span> <span class="cm ins">nineteen</span>
+      <span class="cm del">weeks</span> <span class="cm ins">days</span> late.</div>
+    <div class="row">
+      <span class="chip">Replace</span>
+      <span class="txt"><span class="was">three</span><span class="arrow">→</span><span class="now">nineteen</span></span>
+      <span class="who"><span class="dot"></span>@alex</span>
+      <span class="ops"><i>✓</i><i>✕</i></span>
+    </div>
+    <div class="row">
+      <span class="chip">Replace</span>
+      <span class="txt"><span class="was">weeks</span><span class="arrow">→</span><span class="now">days</span></span>
+      <span class="who"><span class="dot"></span>@alex</span>
+      <span class="ops"><i>✓</i><i>✕</i></span>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <span class="sub">CriticMarkup, kept inside the Markdown — the revisions travel with the file</span>
+  <span class="url">sinolonghai.github.io/critic-notebook</span>
+</div>
+</body></html>
