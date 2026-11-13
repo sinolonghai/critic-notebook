@@ -263,6 +263,23 @@ started with. If a sentence there is wrong, the AI changed something outside a m
 original is gone from the file and rejecting no longer recovers it. Rule 1 is first because it
 is the only one whose breach is silent.
 
+If you kept a copy of the file as it was, that check can be exact instead of attentive:
+
+```sh
+node tools/check-markup.mjs before.md after.md
+```
+
+It asserts that rejecting every suggestion reproduces `before.md` byte for byte, and when it
+does not it names the rule that was broken — a paragraph rewrapped, a newline left outside a
+mark, spacing padded between CJK and Latin, an excerpt returned instead of the document. It
+then reports the shape of what came back: how many marks of each kind, how wide they are
+(a whole paragraph swapped as one replacement parses fine and reviews badly), and whether the
+comments are signed. Exit status is 0 on pass, so it drops into a script.
+
+It is also how to compare one assistant against another on the same document, which is worth
+doing: following rule 1 means reproducing text verbatim, and models differ at it more than
+they differ at the editing itself.
+
 ## Comparing two versions
 
 The **Compare** tab diffs the open document against another one — a different file, or an

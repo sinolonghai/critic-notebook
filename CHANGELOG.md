@@ -25,6 +25,14 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
+- `tools/check-markup.mjs` judges a document an assistant marked up: it asserts that rejecting
+  every suggestion reproduces the original byte for byte, and names the rule behind a failure
+  rather than printing a diff — rewrapped text, a newline outside a mark, CJK spacing padded,
+  an excerpt in place of the document. It runs the page's own parser, so what the tool accepts
+  is the definition of correct, and it exits non-zero, so comparing assistants on one document
+  is a loop rather than a reading exercise. The silent failures are the point: a paragraph
+  quietly rewrapped still renders correctly and still carries its marks, and has taken the
+  original with it.
 - A selection can be copied. It could not be: the popover that opens on a selection focused
   its comment input, which collapsed the selection, so the copy shortcut had nothing to act on
   and the only way to lift text out of a document was to open the block for editing and copy
