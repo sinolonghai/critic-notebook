@@ -25,7 +25,7 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
-- README gains a prompt for having a model mark a document up in CriticMarkup, and the one
+- README gains a prompt for having an AI mark a document up in CriticMarkup, and the one
   check worth doing on what comes back: the **Original** view should read as the document you
   started with, because an edit made outside a mark destroys the original silently. The prompt
   is tested rather than asserted — its output is parsed by the real page and asserted to

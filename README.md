@@ -202,13 +202,14 @@ sentence five times still produces one clean `{~~old~>new~~}` rather than five n
 The diff is word-level for Latin scripts and character-level for CJK, so changing two characters
 in a Chinese paragraph marks two characters.
 
-## Having a model mark up the changes
+## Having an AI mark up the changes
 
-The editor does not care who wrote the marks. A model can produce them, and the document then
-arrives as a list of suggestions to take or drop one at a time — which beats reading the new
-version straight through and hoping you notice what moved.
+The editor does not care who wrote the marks. An AI assistant — Claude, ChatGPT, DeepSeek,
+Gemini, whichever you use — can produce them, and the document then arrives as a list of
+suggestions to take or drop one at a time, which beats reading the new version straight
+through and hoping you notice what moved.
 
-Give the model the document and this:
+Give it the document and this:
 
 ```text
 Mark up this Markdown document with tracked changes in CriticMarkup, so that a human can
@@ -233,10 +234,13 @@ no preamble, no summary, no diff.
 ```
 
 Save what comes back as a `.md` and open it, or paste it in with **Paste** in the left pane.
+If you use a coding agent that edits files on disk — Claude Code, say — give it the same
+rules and point it at the file instead, and the marked-up version is waiting when you open
+it.
 
 **Check rule 1 was obeyed before trusting the rest.** Switch to **Original**: that view
 resolves every mark back to the text it replaced, so it should read as the document you
-started with. If a sentence there is wrong, the model changed something outside a mark — the
+started with. If a sentence there is wrong, the AI changed something outside a mark — the
 original is gone from the file and rejecting no longer recovers it. Rule 1 is first because it
 is the only one whose breach is silent.
 
@@ -417,15 +421,15 @@ packfiles are not, and a reader that handled only loose objects would work on a 
 quietly stop after the first `git gc` — which is worse than not having it.
 
 **AI assistance in the editor**, listed last because the first question is whether it belongs
-here at all. A browser can call a model API perfectly well; what it cannot do is hold the key
+here at all. A browser can call an AI API perfectly well; what it cannot do is hold the key
 safely. A single local file has only `localStorage`, and in Chrome every `file://` page shares
 one store — so any other local HTML file you ever open could read it. That argues for an
 optional localhost helper holding the key, with the page degrading to no AI button when it is
 not running, at the cost of this no longer being a thing you download and double-click. The
-deeper objection is that this tool is a reviewing surface, not a writing one: the model already
+deeper objection is that this tool is a reviewing surface, not a writing one: the AI already
 works upstream, through CriticMarkup it writes or a second version to compare against, and the
-reason the tool exists is that a human should be the one reading what the model changed.
-Putting the model back inside that step undoes it.
+reason the tool exists is that a human should be the one reading what the AI changed. Putting
+the AI back inside that step undoes it.
 
 ## Known limits
 
