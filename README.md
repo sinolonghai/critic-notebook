@@ -49,7 +49,10 @@ This fills that gap. There are two ways in:
   inserted paragraph does not report the whole file as changed. Read-only for now; turning a
   comparison back into accept-or-reject suggestions is the first item under [To do](#to-do).
 
-Either way the reviewer never has to learn CriticMarkup to review in it.
+Either way the reviewer never has to learn CriticMarkup to review in it. That is deliberate:
+this is built for the people who actually review documents, not only for engineers who are
+at home in a diff. Nothing to install, no command line, no git — download one file,
+double-click it, and click a paragraph to change it.
 
 ## Getting it
 
