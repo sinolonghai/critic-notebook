@@ -227,6 +227,11 @@ const signed = d.marks.filter(m => m.who).length;
 const comments = d.marks.filter(m => m.t === 'com').length;
 
 console.log('\nshape');
+/* Density is the one mechanical signal for a document nobody will review properly. Every
+   mark can be correct and the whole still be unreviewable: at some point the reader stops
+   deciding and starts accepting, and an invented figure rides through with the prose. */
+const per1k = d.marks.length / original.text.length * 1000;
+console.log(`  density      : ${per1k.toFixed(1)} marks per 1,000 characters of the original`);
 console.log(`  marks        : ${d.marks.length}` +
             (d.marks.length ? '  (' + Object.entries(byKind).map(([k, n]) => `${n} ${k}`).join(', ') + ')' : ''));
 if (spans.length) {
@@ -244,6 +249,25 @@ if (comments) {
 }
 
 /* 5. legal but hard to review */
+if (per1k > 12) {
+  warn(`${per1k.toFixed(0)} marks per 1,000 characters is a lot to decide one at a time. Past some ` +
+       `density a\n      reader stops deciding and starts accepting, and whatever is wrong rides ` +
+       `through with\n      what is right — so check this one before trusting it, especially any ` +
+       `mark that\n      changes a figure.`);
+}
+/* A replacement that swaps a number is a factual claim, not a style preference, and the two
+   do not deserve the same glance. Counting them says how much of a run has to be verified
+   rather than read. */
+const numeric = subs.filter(m => /\d/.test(m.rem || '') && (m.rem || '') !== (m.add || '') &&
+                                 /\d/.test(m.add || '') &&
+                                 (m.rem || '').replace(/\D/g, '') !== (m.add || '').replace(/\D/g, ''));
+if (numeric.length) {
+  const peek = numeric.slice(0, 4).map(m => `${JSON.stringify(m.rem)}→${JSON.stringify(m.add)}`).join(', ');
+  warn(`${numeric.length} replacement${numeric.length === 1 ? '' : 's'} change a number: ${peek}` +
+       `${numeric.length > 4 ? ', …' : ''}\n      Each of those is a factual claim the judge cannot ` +
+       `check — it only knows the original\n      can be restored. Verify them against the source ` +
+       `before accepting anything.`);
+}
 if (!d.marks.length) warn('no marks at all — the assistant changed nothing, or changed it without marking it.');
 if (widest && weight(widest) > 400) {
   const peek = marked.text.slice(widest.start, widest.start + 70).replace(/\n/g, '\\n');

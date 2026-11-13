@@ -441,6 +441,19 @@ starts over.
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
 
+**Make a changed figure look different from a changed word.** A replacement that swaps `206`
+for `188.5` is a factual claim; one that swaps `lays` for `sets` is a preference. The page
+renders them identically, so they get the same glance, and the glance that suits the second
+is nowhere near enough for the first. One assistant returned a document with thirty-five
+numeric replacements, a dozen of them invented figures in the right shape, and every one was
+formally correct CriticMarkup. Marks whose two sides differ in their digits should be able to
+say so — a distinct tint, and a count in the status bar.
+
+**Guard Accept all.** It is one click in the status bar and it writes every suggestion into
+the file. That is fine for a document a colleague marked up and wrong for one an assistant
+produced in bulk, which is where it is most tempting. It should at least say what it is about
+to accept, and how many of those change a number.
+
 **Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
 only draws them. Writing the result back out gives a third document whose differences *are*
 tracked suggestions — Word's "legal blackline" — which can then be accepted or rejected one at

@@ -174,6 +174,57 @@ is identical on both sides, because the page strikes the whole old text beside t
 text — it word-diffs only while you are editing — so a baggy mark leaves the reader hunting
 for the difference.
 
+### ChatGPT, 2026-11-13, Chinese document through plain chat
+
+Passes every mechanical check, two warnings, and **it is the run you would least want to
+accept**. Read this one before trusting a PASS.
+
+**Delivery through the chat window was clean**, which was the thing under test: all 18 straight
+quotes came back straight, and the subscripts, the real minus sign, `×`, `÷`, `→` and the
+fullwidth bar all survived. Curly quotes appear in the returned file, but only inside text
+ChatGPT wrote itself — the invariant settles that, which is why the census and the invariant
+are both worth having.
+
+**116 marks, 72 of them replacements — 19 per 1,000 characters against WorkBuddy's 7.5.**
+
+**35 of those replacements change a number, and the ones that matter are invented.** The
+document's cost model is internally consistent: 180 lb N at \$836/ton of 82% anhydrous is
+\$91.8, and the three nutrients sum to exactly the \$206.1 printed. ChatGPT replaced \$206.1
+with \$188.5, \$225.1 with \$203.9, the \$19.1 increase with \$15.5, +9.2% with +8.2%, and the
+nitrogen share with \$13.2. It also altered the whole 2025 price column — 836 to 838, 919 to
+922, and so on — and the new totals do not follow from those either: recomputed from its own
+figures the 2025 cost is \$206.5 and the increase \$18.7. The replacements are not a correction
+of the arithmetic and not a consequence of the changed prices. They are plausible numbers in
+the right shape.
+
+It changed the DTN publication date from 2026-10-27 to 2026-10-21, and rewrote the footnote
+that explains the 2025 column is *derived* into a claim that it comes from DTN's own
+same-period quotes.
+
+Some of its edits are good — `差了 9 倍` to `相差 16 个百分点，前者是后者的 9 倍` is the
+sharpest version of a catch two other runs also made, and `全部氮肥` to `表列四种氮肥` is a
+real gain in precision. The language work and the data work came from the same pass, which is
+what makes the run dangerous rather than merely wrong.
+
+#### What this says about the judge, and about the page
+
+**A PASS means every original is recoverable. It does not mean a single suggestion is true.**
+That was always the claim, and this run is what the claim looks like when it is the only one
+standing. No format rule was broken: a replacement is correct CriticMarkup whether it swaps a
+word for a better word or a figure for an invented one.
+
+Two measurements were added here, both of which the earlier runs gave no reason to want:
+
+- **Density**, marks per 1,000 characters. It is the one mechanical signal for a document
+  nobody will review properly. Past some density a reader stops deciding and starts accepting.
+- **Replacements that change a number**, counted and listed. A changed digit is a factual
+  claim; a changed word is a preference. They do not deserve the same glance, and the judge
+  can check neither — so it names them and says to verify them.
+
+The page has a one-click **Accept all** in the status bar. A 116-mark document with a dozen
+invented figures is exactly the case where that button writes plausible nonsense into a file
+and nobody notices. Two entries went onto the to-do list for it.
+
 ### Still to run
 
 ChatGPT (Code Interpreter and Canvas separately — Canvas is an editing surface and may
