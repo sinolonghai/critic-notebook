@@ -236,8 +236,10 @@ accept or reject each change separately. Return the complete document and nothin
 no preamble, no summary, no diff.
 
 1. Every character you are not changing must come through byte-identical. Do not rewrap
-   lines, do not normalise quotes or dashes, do not reformat tables. Anything outside a
-   mark is read as the original text, so an unmarked change is an invisible one.
+   lines, do not normalise quotes or dashes, do not reformat tables, and do not add or
+   remove spaces between scripts — CJK text sitting directly against Latin text or a
+   number stays that way. Anything outside a mark is read as the original text, so an
+   unmarked change is an invisible one.
 2. Use only these marks:
        {--deleted--}  {++inserted++}  {~~old~>new~~}  {>>comment<<}  {==highlight==}
 3. Mark the smallest span that carries the change. A replaced word is {~~word~>better~~},
@@ -253,9 +255,19 @@ no preamble, no summary, no diff.
 ```
 
 Save what comes back as a `.md` and open it, or paste it in with **Paste** in the left pane.
-If you use a coding agent that edits files on disk — Claude Code, say — give it the same
-rules and point it at the file instead, and the marked-up version is waiting when you open
-it.
+
+**If the assistant can edit the file itself** — Claude Code, WorkBuddy, Copilot in an editor —
+do not ask it for the document back. Reprinting a file is where a model drifts, and rule 1 is
+the rule reprinting breaks. Point it at the file and swap the first two sentences for these:
+
+```text
+Add tracked changes to this file in place, in CriticMarkup, so a human can accept or reject
+each change separately. Insert marks around the text that is already there; do not rewrite
+the file, and do not touch a single character you are not marking. Make no other edit of any
+kind — not a rewrap, not a reformat, not a spacing fix.
+```
+
+The rest of the rules below apply unchanged.
 
 **Check rule 1 was obeyed before trusting the rest.** Switch to **Original**: that view
 resolves every mark back to the text it replaced, so it should read as the document you

@@ -7,3 +7,6 @@ samples-local/
 
 # versions exported by tools/history.mjs for the Compare tab
 history/
+
+# what each assistant returned, for tools/check-markup.mjs — see docs/model-notes.md
+model-runs/
