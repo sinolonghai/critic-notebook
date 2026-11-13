@@ -20,15 +20,25 @@ Verdict is `check-markup.mjs`: rejecting every suggestion has to reproduce the o
 for byte. Warnings — a whole paragraph swapped as one replacement, unsigned comments, marks
 the parser cannot see — do not fail a run but are recorded.
 
-A note on delivery, which is a separate axis from whether the markup is correct:
+Two things vary independently, and the first runs made it clear they should be named apart:
 
-- **Writes files on your disk** — Claude Code, WorkBuddy, Copilot in VS Code. The file arrives
-  intact; only the markup is under test. Worth telling these to *edit the file in place* rather
-  than reprint it, since a patch cannot drift the way a reprint can.
-- **Writes to a repo or cloud through MCP** — the file still arrives intact, one step removed.
-- **Chat text only** — DeepSeek's web client, consumer Copilot. Here the braces have to survive
-  the interface as well: watch for smart quotes, stripped trailing whitespace, and a markdown
-  renderer that eats `{++ ++}`.
+**The harness decides how the file travels** — and which prompt to use.
+
+- *Writes files on your disk* — Claude Code, WorkBuddy, Copilot in an editor. The file arrives
+  intact, so only the markup is under test. Tell these to **edit in place**: a patch cannot
+  drift the way a reprint can, which is most of rule 1.
+- *Writes to a repo or cloud through MCP* — intact, one step removed.
+- *Chat text only* — a web client, consumer Copilot. Here the braces have to survive the
+  interface too: smart quotes, stripped trailing whitespace, a markdown renderer that eats
+  `{++ ++}`. Only these need the "return the complete document" prompt.
+
+**The model decides whether the markup is any good** — granularity, what it notices, whether
+it comments instead of silently changing.
+
+The same model lands in different rows depending on what is driving it. DeepSeek through its
+own web client is chat-only; DeepSeek inside WorkBuddy writes the file. So a result is a
+harness-and-model pair, never a model alone, and a flaw belongs to whichever of the two it
+survives a change of the other.
 
 ## Results
 
@@ -80,7 +90,7 @@ The crashed file is kept at `model-runs/_partial/` and the working copies were r
 originals before the re-run, since re-running over a half-marked file stacks one pass on
 another.
 
-### Tencent WorkBuddy, 2026-11-13, second run (a different underlying model)
+### Tencent WorkBuddy + DeepSeek 4.1 Flash, 2026-11-13
 
 Passes. 46 marks on `samples/fertilizer.md` — 11 replacements, 2 deletions, 1 insertion, 9
 highlights, 23 comments — at 16 characters per edit, widest 34. That granularity is the
@@ -108,8 +118,15 @@ Three of those — the summary listing seven of eight varieties, `+18%` being th
 all, and the 19.1/9.2% inconsistency with its knock-on to 86% — are real defects in the
 document that the calibration run did not find.
 
-It still signs itself `@//workbuddy/`, with a different model underneath than the crashed
-run. **So that is the harness, not the model**, and no wording in rule 7 will fix it.
+It still signs itself `@//workbuddy/`, on a different model than the run that crashed. **So
+that belongs to the harness**, and no wording in rule 7 will fix it — it is WorkBuddy's own
+identifier reaching the file, not the model's choice.
+
+Worth noting what the pair is: this is the stack this tool was argued to belong in, running.
+WorkBuddy holds the credentials and the file, DeepSeek produces the marks, and the review
+happens here. Nothing in the page needed an API key, which was the objection that put
+in-editor AI last on the to-do list. And the model is a *Flash*-tier one — if the cheap fast
+tier reviews this well, the economics of the whole loop are better than expected.
 
 **What this run does not tell you**, and it matters: `check-markup.mjs` judges whether the
 markup is safe to review, not whether the review is any good. Everything above about the
