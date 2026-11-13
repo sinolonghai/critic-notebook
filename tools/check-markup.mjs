@@ -83,6 +83,13 @@ function loadPage() {
 /* ---------- helpers ---------- */
 
 const norm = t => t.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+/* What a text box turns characters into when nobody asked it to. A chat window that
+   smartens a quote or lengthens a hyphen breaks rule 1 without the assistant having typed
+   anything wrong, and blaming the model for it sends you to fix the prompt instead of the
+   transport. */
+const TYPO = { '"': '\u201c\u201d\u301d\u301e', "'": '\u2018\u2019',
+               '-': '\u2013\u2014\u2212', '~': '\uff5e\u301c',
+               '.': '\u2026', ' ': '\u00a0\u3000' };
 const KIND = { ins: 'insert', del: 'delete', sub: 'replace', com: 'comment', hil: 'highlight' };
 
 function readFile(p) {
@@ -119,6 +126,11 @@ function diagnose(expected, got) {
     else
       out.push('', '  Only whitespace differs. Spaces were added or removed outside a mark —',
                    '  often spacing inserted between CJK and Latin text, which is rule 1.');
+  } else if (TYPO[expected[at]] && TYPO[expected[at]].includes(got[at])) {
+    out.push('', `  ${JSON.stringify(expected[at])} came back as ${JSON.stringify(got[at])}. That is typographic`,
+                 '  substitution, which an assistant does not do to text it is copying — an interface did',
+                 '  it on the way through. Ask for the document inside a code block, or move the file',
+                 '  rather than the text. The markup itself may be fine.');
   } else if (expected.replace(/[ \t]/g, '') === got.replace(/[ \t]/g, '')) {
     /* The usual way a model breaks a CJK document: it "helpfully" pads the seams between
        scripts. Nothing reads as wrong, and the original is gone all the same. */
