@@ -11,6 +11,13 @@
   dialog and so reaches a copy that lives nowhere near the folder you opened.
 - `tools/history.mjs` exports a file's past versions into `history/` for the Compare tab, so
   git history is read by git rather than by a packfile parser in the browser.
+- The page now carries its own document head — doctype, `<meta charset="utf-8">`, viewport.
+  It had none: the artifact host wraps uploads in a skeleton and macOS Chrome guesses UTF-8
+  for local files, so both environments hid it. Downloaded and opened from disk, which is
+  what the README tells people without git to do, the file rendered in quirks mode and left
+  the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
+  GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
+  quirks mode shifts content about 3px; nothing else moves.
 - README gains a **Later** section recording what is planned and what makes each piece hard.
 - Fixes a parser bug the compare work surfaced, latent in the editor all along: a mark whose
   text contains one backtick — which a diff produces as soon as formatting changes — left a
