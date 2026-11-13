@@ -69,6 +69,11 @@
 - The cell editor turns the browser's spell checker back on. It holds prose — the marks are
   resolved away before the text reaches it — so underlines land on words rather than on
   CriticMarkup delimiters. The paste and export boxes, which hold raw markdown, keep it off.
+- **To do** records the direction the day arrived at: a panel beside an assistant, which needs
+  the document handed in and out through whatever opened the page, because a browser page
+  cannot be given a path. The entry that asked whether AI belonged inside the editor is marked
+  decided against, with the reason — the tool wants to be inside an assistant rather than host
+  one, and that inversion dissolves the credential problem instead of working around it.
 - README gains a **To do** section recording what is planned and what makes each piece hard,
   and a **Why** that starts from the case this tool exists for: an AI edits a Markdown document
   and a human has to see what it changed.

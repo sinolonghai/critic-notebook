@@ -464,6 +464,57 @@ the file. That is fine for a document a colleague marked up and wrong for one an
 produced in bulk, which is where it is most tempting. It should at least say what it is about
 to accept, and how many of those change a number.
 
+**Take the document in and out through whatever opened the page.** The use this tool is headed
+for is a panel beside an assistant: you ask it to edit a file, it marks the changes, the marked
+file opens here, you take and drop them one at a time, save, and tell the assistant to commit
+the result or send it on. Everything in that sentence works today except the opening and the
+saving, and those do not work for a reason no amount of layout fixes: **a browser page cannot
+be handed a path.** `showOpenFilePicker` needs a human gesture and will not take a string, so
+in a panel the file picker is not inconvenient, it is the wrong mechanism.
+
+What fits is a small message protocol, perhaps thirty lines, carrying no credentials and
+touching no filesystem:
+
+```text
+host → page   { type: 'open', name: 'A.md', text: '…' }
+page → host   { type: 'save', text: '…' }
+              { type: 'dirty', changes: 3 }
+```
+
+The third message is not decoration. The guard that protects unsaved review work is a
+`beforeunload` handler, and that does not fire reliably for an iframe the host tears down — so
+a host that closes the panel would take a half-finished review with it. The page has to be able
+to say it is holding decisions.
+
+There is already a foothold: the page detects `window.self !== window.top` and turns off the
+File System Access API, the directory picker and the download path when embedded, so Save
+degrades to **Copy** — which is exactly the slot where *hand the text back to the host*
+belongs. Keep the surface generic, since no host has a convention for this yet, and keep the
+standalone file a first-class citizen, because that is what works today with nobody's
+cooperation.
+
+Later, and only once the first three messages are real: `{ type: 'ask', blockId, text }` with
+`{ type: 'suggest', blockId, text }` coming back would remove the copy and the paste from
+"rewrite this paragraph for me", which is otherwise the one step in the loop that is still
+manual.
+
+**A narrow mode, for living in that panel.** The panes are the easy half — both already
+collapse into drawers at 1180 and 880 pixels, and what is wrong at 420 is the defaults. The
+work is the top bar, which holds pane toggles, the path, four view tabs, the signing name,
+Undo, Open folder, Open file, Save as and Save, and will not fit in a side panel at any font
+size.
+
+The two changes converge, which is the good news: an embedded page needs no Open folder, no
+Open file, no Save as and no signing name — the host supplies the file and there is one
+reviewer — and those are exactly the controls with nowhere to go. So narrow mode is mostly
+subtraction, and settling the protocol first tells you what to subtract.
+
+What should go *in* instead: the outline's jump-to-next-change buttons, which are the most
+useful control in the whole interface for this job and are currently buried in a pane that a
+narrow layout would throw away. `← →  3 / 7` in the bar turns a cramped panel into a review
+queue, which for "the assistant changed four things, decide on each" may be better than the
+wide layout rather than a degradation of it.
+
 **Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
 only draws them. Writing the result back out gives a third document whose differences *are*
 tracked suggestions — Word's "legal blackline" — which can then be accepted or rejected one at
@@ -492,16 +543,25 @@ handle on the repository and browsers now decompress zlib natively. Loose object
 packfiles are not, and a reader that handled only loose objects would work on a fresh repo and
 quietly stop after the first `git gc` — which is worse than not having it.
 
-**AI assistance in the editor**, listed last because the first question is whether it belongs
-here at all. A browser can call an AI API perfectly well; what it cannot do is hold the key
-safely. A single local file has only `localStorage`, and in Chrome every `file://` page shares
-one store — so any other local HTML file you ever open could read it. That argues for an
-optional localhost helper holding the key, with the page degrading to no AI button when it is
-not running, at the cost of this no longer being a thing you download and double-click. The
-deeper objection is that this tool is a reviewing surface, not a writing one: the AI already
-works upstream, through CriticMarkup it writes or a second version to compare against, and the
-reason the tool exists is that a human should be the one reading what the AI changed. Putting
-the AI back inside that step undoes it.
+**AI assistance in the editor — decided against,** and kept here because a list that records
+what was turned down is more use than one that quietly drops it.
+
+The objection that killed it was practical. A browser can call an AI API perfectly well; what
+it cannot do is hold the key safely. A single local file has only `localStorage`, and in Chrome
+every `file://` page shares one store, so any other local HTML file you ever open could read
+it. A localhost helper would fix that and cost the one property that makes this tool easy to
+hand to somebody: download a file, double-click it.
+
+But the better answer turned out to be the other way round. **The tool does not want an
+assistant inside it; it wants to be inside an assistant** — the two entries at the top of this
+list. That inversion dissolves the key problem rather than working around it: the assistant
+already holds the credentials, and the page needs none. It has been seen working, with
+WorkBuddy holding the file and the key, DeepSeek writing the marks, and the review happening
+here (see [docs/model-notes.md](docs/model-notes.md)).
+
+And the deeper objection stands either way: this is a reviewing surface, not a writing one. The
+reason it exists is that a human should be the one reading what the model changed. Putting the
+model back inside that step undoes it.
 
 ## Known limits
 
