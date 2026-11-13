@@ -396,6 +396,15 @@ starts over.
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
 
+**Let a selection be copied, not only commented on.** Selecting a phrase opens the comment
+popover, and the popover focuses its input, which collapses the selection — so `⌘C` has
+nothing to copy, and the only way to get the text out is to open the block for editing and
+copy from the textarea. The popover should offer the choice, Copy or Comment, and leave the
+input unfocused until Comment is chosen. That one change covers both halves of the problem:
+with the selection left where it was, the keyboard shortcut starts working again on its own,
+and the Copy button needs nothing new — the popover is already holding the text, since it
+displays it.
+
 **Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
 only draws them. Writing the result back out gives a third document whose differences *are*
 tracked suggestions — Word's "legal blackline" — which can then be accepted or rejected one at
