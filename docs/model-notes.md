@@ -80,6 +80,42 @@ The crashed file is kept at `model-runs/_partial/` and the working copies were r
 originals before the re-run, since re-running over a half-marked file stacks one pass on
 another.
 
+### Tencent WorkBuddy, 2026-11-13, second run (a different underlying model)
+
+Passes. 46 marks on `samples/fertilizer.md` — 11 replacements, 2 deletions, 1 insertion, 9
+highlights, 23 comments — at 16 characters per edit, widest 34. That granularity is the
+finest of any run so far and it is the right end of the scale: the reader sees which words
+moved.
+
+**It reviewed the document better than the calibration run did.** Seven of its numeric claims
+were checked independently and all seven hold:
+
+| Its claim | Checked |
+| --- | --- |
+| "13.5 months" is nearer 14 | 2025-09-05 → 2026-10-30 is 420 days, 13.80 months |
+| `+$19.1` should be 19.0 | 225.1 − 206.1 = 19.0, and 16.5 + 1.8 + 0.7 = 19.0 |
+| 19.1 implies 9.3%, not the stated 9.2% | 19.0/206.1 = 9.22%, 19.1/206.1 = 9.27% |
+| so the 86% downstream becomes 87% | 16.5/19.0 = 86.8% |
+| ±1% comes from rounding the published percentage, not the tonne price | tonne rounding is ±0.06%; a percentage rounded to whole points spans 0.84% |
+| "the 18% is not the highest" contradicts the table | +18% is the highest of the eight |
+| potash did not rise "all autumn" | 2026-07-10 is 499.58 against 504.58 in June |
+
+Two more were careful table reading rather than arithmetic: a bolded 1099.50 that is neither
+the maximum nor the minimum under a caption saying bold marks extremes, and a tied maximum
+marked on only one of its two rows.
+
+Three of those — the summary listing seven of eight varieties, `+18%` being the highest after
+all, and the 19.1/9.2% inconsistency with its knock-on to 86% — are real defects in the
+document that the calibration run did not find.
+
+It still signs itself `@//workbuddy/`, with a different model underneath than the crashed
+run. **So that is the harness, not the model**, and no wording in rule 7 will fix it.
+
+**What this run does not tell you**, and it matters: `check-markup.mjs` judges whether the
+markup is safe to review, not whether the review is any good. Everything above about the
+quality of the edits came from checking the claims by hand. The judge would have passed an
+assistant that marked up the document impeccably and said nothing worth reading.
+
 ### Still to run
 
 ChatGPT (Code Interpreter and Canvas separately — Canvas is an editing surface and may
