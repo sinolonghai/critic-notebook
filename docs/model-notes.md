@@ -55,6 +55,31 @@ other assistants will break:
 - **Rule 3 is a judgement call, not a rule.** Marking `{~~没有一个是跌的~>无一下跌~~}` is one
   mark for a six-character phrase, which reads well. The temptation is to swap the sentence.
 
+### Tencent WorkBuddy, 2026-11-13 — crashed partway, and the partial run is informative
+
+WorkBuddy stopped partway through `samples/fertilizer.md`, having written two edits. Those
+two pass: rejecting them reproduces the original byte for byte, 10 characters per edit.
+
+This is the first evidence for the in-place prompt. WorkBuddy edits the file itself rather
+than reprinting it, and rule 1 — the rule a reprint breaks — held, including across Chinese
+text with full-width punctuation and a `<br>` in a nearby table. One assistant and two edits
+is not a result, but it is the right sign.
+
+The edits were good review, and one of them found something the calibration run missed: the
+summary's second bullet lists seven of the eight varieties the first section tabulates, and
+WorkBuddy inserted the missing `10-34-0` with a comment saying why. Reviewing the same
+document earlier, Claude did not notice.
+
+It signed itself `@//workbuddy/`. The page's author pattern accepts that, so the comments
+parsed, counted as attributed, and would have shown `//workbuddy/` as the author on screen.
+The judge reported "4 marks carry @name" and said nothing about the name — so it now prints
+the names it found and warns when one contains characters nobody would type. Third
+measurement the judge got wrong until real output went through it.
+
+The crashed file is kept at `model-runs/_partial/` and the working copies were reset to the
+originals before the re-run, since re-running over a half-marked file stacks one pass on
+another.
+
 ### Still to run
 
 ChatGPT (Code Interpreter and Canvas separately — Canvas is an editing surface and may

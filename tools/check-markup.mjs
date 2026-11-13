@@ -222,7 +222,14 @@ if (spans.length) {
   console.log(`  granularity  : ${mean} characters per edit on average, widest ${Math.max(...spans)}` +
               ` (over ${edits.length} edit${edits.length === 1 ? '' : 's'}, comments excluded)`);
 }
-if (comments) console.log(`  attribution  : ${signed ? signed + ' mark(s) carry @name' : 'none of the comments are signed'}`);
+/* Print the names, not just the count. An assistant once signed itself "@//workbuddy/",
+   which the page's author pattern accepts — so it parsed, it counted as attributed, and the
+   name on screen was wrong. A count cannot show that; the names can. */
+const names = [...new Set(d.marks.map(m => m.who).filter(Boolean))];
+if (comments) {
+  console.log(`  attribution  : ${names.length ? names.map(n => '@' + n).join(', ') +
+    ` (${signed} mark${signed === 1 ? '' : 's'})` : 'none of the comments are signed'}`);
+}
 
 /* 5. legal but hard to review */
 if (!d.marks.length) warn('no marks at all — the assistant changed nothing, or changed it without marking it.');
@@ -235,6 +242,13 @@ if (widest && weight(widest) > 400) {
 if (/\n{3,}/.test(accepted) || /\n{3,}/.test(rejected)) {
   warn('blank runs of three or more newlines appear after accepting or rejecting; the marks are\n' +
        '      probably sitting around the line breaks rather than inside them (rule 6).');
+}
+const odd = names.filter(n => !/^[\w.\-\u3000-\u9fff]+$/.test(n));
+if (odd.length) {
+  warn(`the author name${odd.length === 1 ? '' : 's'} ${odd.map(n => JSON.stringify('@' + n)).join(', ')} ` +
+       `contain${odd.length === 1 ? 's' : ''} characters no reader\n      would type. The page's ` +
+       `pattern accepts them, so they parse and show up as the author verbatim —\n      check how ` +
+       `the assistant was told to sign itself (rule 7).`);
 }
 if (comments && !signed) {
   warn('no comment is signed. Starting one with "@name:" attributes it, which is what lets a\n' +
