@@ -262,6 +262,8 @@ button,input,textarea{font:inherit;color:inherit}
 .cm.dagger{font-family:var(--ui);color:var(--note);background:var(--note-bg);font-size:.7em;
   padding:.1em .34em;vertical-align:.32em;border-radius:4px;font-weight:600;line-height:1;cursor:pointer}
 .cm.lit{box-shadow:0 0 0 2px var(--accent)}
+/* not a fourth colour competing with insert and delete: a marker that reads "verify me" */
+.cm.num{outline:1px dashed var(--note);outline-offset:1px}
 
 .blk{border-left:3px solid var(--rule-strong);padding:1px 0 1px 11px;margin:0 0 .5em}
 .blk>:first-child{margin-top:0}
@@ -302,7 +304,17 @@ button,input,textarea{font:inherit;color:inherit}
 .mk[data-k="ins"] .chip{background:var(--ins-bg);color:var(--ins)}
 .mk[data-k="del"] .chip{background:var(--del-bg);color:var(--del)}
 .mk[data-k="com"] .chip,.mk[data-k="hil"] .chip{background:var(--note-bg);color:var(--note)}
+.mk .figflag{flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:.04em;padding:2px 6px;
+  border-radius:4px;background:var(--note-bg);color:var(--note);margin-top:1px}
 .mk .txt{flex:1;min-width:0;font-family:var(--doc);line-height:1.5;word-break:break-word}
+.figlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;
+  max-height:40vh;overflow-y:auto}
+.figlist li{font-family:var(--doc);font-size:13px;line-height:1.45;padding:5px 9px;
+  background:var(--paper);border:1px solid var(--rule);border-radius:6px}
+.figlist .was{color:var(--del);text-decoration:line-through}
+.figlist .now{color:var(--ins)}
+.figlist .arrow{color:var(--ink-faint);font-family:var(--mono);font-size:11px;margin:0 7px}
+.figlist .more{border-style:dashed;color:var(--ink-faint);font-family:var(--ui);font-size:12px}
 .mk .txt .was{color:var(--del);text-decoration:line-through;text-decoration-thickness:1px}
 .mk .txt .now{color:var(--ins)}
 .mk .txt .arrow{color:var(--ink-faint);font-family:var(--mono);font-size:11px;margin:0 5px}
@@ -1186,6 +1198,20 @@ function openCount(){ return doc.marks.filter(function(m){ return !m.attached; }
 function isDirty(){ return doc.src !== savedSrc; }
 
 /* ===================== mark rendering ===================== */
+/* A mark that changes the figures in the text is a claim about the world; one that changes
+   words is a choice about words. They are not the same kind of edit and should not get the
+   same glance — an assistant once returned thirty-five numeric replacements with a dozen
+   invented figures among them, every one formally correct CriticMarkup. Deleting a number and
+   inserting one both count: both change what the document asserts. */
+function digitsOf(t){ return String(t === undefined || t === null ? '' : t).replace(/\D/g, ''); }
+function changesFigure(mk){
+  if(!mk || (mk.t !== 'ins' && mk.t !== 'del' && mk.t !== 'sub')) return false;
+  return digitsOf(mk.rem) !== digitsOf(mk.add);
+}
+function figureCount(){
+  return doc.marks.filter(function(m){ return !m.attached && changesFigure(m); }).length;
+}
+
 function markHtml(mk){
   if(!mk) return '';
   var tag = ' data-mi="' + localOf(mk) + '"';
@@ -1201,9 +1227,10 @@ function markHtml(mk){
     if(mk.t === 'ins' || mk.t === 'sub') return flat(mk.add);
     return flat(mk.body);
   }
-  if(mk.t === 'ins') return box('ins', flat(mk.add));
-  if(mk.t === 'del') return box('del', flat(mk.rem));
-  if(mk.t === 'sub') return box('del', flat(mk.rem)) + box('ins', flat(mk.add));
+  var fig = changesFigure(mk) ? ' num' : '';
+  if(mk.t === 'ins') return box('ins' + fig, flat(mk.add));
+  if(mk.t === 'del') return box('del' + fig, flat(mk.rem));
+  if(mk.t === 'sub') return box('del' + fig, flat(mk.rem)) + box('ins' + fig, flat(mk.add));
   if(mk.t === 'com') return box('dagger', '‡');
   return box('hil', flat(mk.body));
 }
@@ -1240,8 +1267,11 @@ function markRow(mk, mi){
     : who + '<button type="button" class="y" data-act="accept" data-mi="' + mi + '" title="Accept" aria-label="Accept">✓</button>' +
             '<button type="button" class="n" data-act="reject" data-mi="' + mi + '" title="Reject" aria-label="Reject">✕</button>');
 
+  var figflag = changesFigure(mk)
+    ? '<span class="figflag" title="This changes a figure, not a wording — check it against the source">figure</span>'
+    : '';
   return '<div class="mk' + (editing ? ' editing' : '') + '" data-k="' + mk.t + '" data-mi="' + mi + '">' +
-    '<span class="chip">' + LABEL[mk.t] + '</span><span class="txt">' + txt + '</span>' +
+    '<span class="chip">' + LABEL[mk.t] + '</span>' + figflag + '<span class="txt">' + txt + '</span>' +
     (ops ? '<span class="ops">' + ops + '</span>' : '') + '</div>';
 }
 
@@ -1556,6 +1586,7 @@ function paintStatus(){
   var body = resolveRange(0, doc.src.length, view === 'original' ? 'orig' : 'prop');
   document.getElementById('stxt').textContent =
     doc.cells.length + ' blocks · ' + open + ' open suggestion' + (open === 1 ? '' : 's') +
+    (figureCount() ? ' (' + figureCount() + ' changing a figure)' : '') +
     ' · ' + wordCount(body) + ' words ' + label;
   paintStart();
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
@@ -2515,7 +2546,40 @@ document.getElementById('outlist').addEventListener('click', function(ev){
 document.getElementById('jump-next').addEventListener('click', function(){ jumpSuggestion(1); });
 document.getElementById('jump-prev').addEventListener('click', function(){ jumpSuggestion(-1); });
 
-document.getElementById('btn-all-yes').addEventListener('click', function(){ flushEditor(); resolveAll('accept'); toast('All accepted'); });
+/* Accept all writes every suggestion into the file in one go, which is fine for a document a
+   colleague marked up and wrong for one an assistant produced in bulk — and bulk is exactly
+   when the button is most tempting. So it says what it is about to do, and shows the figure
+   changes, because those are the ones that cannot be judged by reading the prose around them. */
+document.getElementById('btn-all-yes').addEventListener('click', function(){
+  flushEditor();
+  var open = doc.marks.filter(function(m){ return !m.attached; });
+  if(!open.length) return;
+  var figs = open.filter(changesFigure);
+  var one = function(s){ return esc(String(s === undefined ? '' : s)).replace(/\n/g, ' '); };
+  var list = figs.length
+    ? '<ul class="figlist">' + figs.slice(0, 7).map(function(m){
+        return '<li>' + (m.rem ? '<span class="was">' + one(m.rem) + '</span>' : '') +
+               (m.rem && m.add ? '<span class="arrow">\u2192</span>' : '') +
+               (m.add ? '<span class="now">' + one(m.add) + '</span>' : '') + '</li>';
+      }).join('') +
+      (figs.length > 7 ? '<li class="more">and ' + (figs.length - 7) + ' more</li>' : '') + '</ul>'
+    : '';
+  var v = openPanel({
+    narrow: true,
+    title: 'Accept all',
+    body: '<p class="hint">This writes all <b>' + open.length + '</b> suggestion' +
+          (open.length === 1 ? '' : 's') + ' into the document.' +
+          (figs.length ? ' <b>' + figs.length + '</b> of them change a figure rather than a ' +
+            'wording, and a figure is a claim about the world — those are worth taking one at a time.'
+                       : '') + '</p>' + list,
+    foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
+          '<button type="button" class="btn primary" data-x="go">Accept all ' + open.length + '</button>'
+  });
+  v.querySelector('[data-x="cancel"]').addEventListener('click', function(){ v.remove(); });
+  v.querySelector('[data-x="go"]').addEventListener('click', function(){
+    v.remove(); resolveAll('accept'); toast('All accepted');
+  });
+});
 document.getElementById('btn-all-no').addEventListener('click', function(){ flushEditor(); resolveAll('reject'); toast('All rejected'); });
 document.getElementById('btn-undo').addEventListener('click', undo);
 

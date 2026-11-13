@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- A mark that changes a figure is told apart from one that changes a word. The inline mark
+  gets a dashed amber outline, its row a **figure** tag, the status bar a count, and
+  **Accept all** stops being one click: it says how many suggestions it is about to write,
+  how many of those change a figure, and lists them. A changed digit is a claim about the
+  world and a changed word is a choice about words; they were rendered identically and so
+  got the same glance. An assistant returned a document with thirty-five numeric
+  replacements, a dozen of them invented figures in the right shape, and every one was
+  formally correct CriticMarkup — nothing but reading caught them, and nobody reads a
+  hundred marks carefully. Deleting a number and inserting one both count, since both
+  change what the document asserts; rewriting `$206` as `206 dollars` does not.
+
 ## 0.2.0 — 2026-11-13
 
 Reviewing a document an AI changed, which is what the first version turned out to be for.

@@ -5,6 +5,7 @@ const CHANGELOG = new URL('../CHANGELOG.md', import.meta.url);
 let code = fs.readFileSync(PAGE,'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
 code = injectExports(code,
   `globalThis.__t={
+  changesFigure, figureCount,
   parse,buildWorking,segment,blocks,lineObjs,resolveRange,cellMarks,cellHtml,gapHtml,
   tokenize,diffTokens,opsToSource,buildBlockSource,cellComments,tidy,scrub,
   resolveText,spanOf,exportText,protectedRanges,SAMPLE,openDoc,cmpPoint,
@@ -335,6 +336,42 @@ ok(typeof T.cmpPoint === 'function', 'cmpPoint is defined (no Range.comparePoint
 {
   const pageSrc = fs.readFileSync(PAGE,'utf8');
   ok(!/\.comparePoint\(/.test(pageSrc), 'the page never calls Range.comparePoint');
+}
+
+// ===== 15b. a mark that changes a figure is told apart from one that changes a word =====
+{
+  T.d = T.parse([
+    'The run cost {~~206~>188.5~~} dollars and took {~~two~>three~~} weeks.',
+    '',
+    'It processed {++1,400++} rows, dropped {--12--} of them, and {~~was~>is~~} finished.'
+  ].join('\n'));
+  T.buildWorking();
+  const marks = T.d.marks.filter(m => !m.attached);
+  const fig = marks.filter(T.changesFigure);
+  ok(marks.length === 5, 'five marks parsed (got ' + marks.length + ')');
+  ok(T.figureCount() === 3,
+     'three of them change a figure: the replacement, the insertion and the deletion (got ' +
+     T.figureCount() + ')');
+  ok(!T.changesFigure(marks.find(m => m.rem === 'two')),
+     'two -> three is a wording, not a figure: no digits on either side');
+  ok(!T.changesFigure(marks.find(m => m.rem === 'was')), 'was -> is is not a figure either');
+  ok(fig.every(m => /\d/.test((m.rem || '') + (m.add || ''))), 'every flagged mark holds a digit');
+
+  /* same digits, different text, is a wording change — "$206" to "206 dollars" asserts nothing new */
+  T.d = T.parse('It cost {~~$206~>206 dollars~~}.');
+  T.buildWorking();
+  ok(T.figureCount() === 0, 'rewriting around a number without changing it is not a figure change');
+
+  /* and the inline mark says so, in markup view only */
+  T.d = T.parse('Cost {~~206~>188.5~~} total.');
+  T.buildWorking(); T.v = 'markup'; T.li = {};
+  const html = T.blocks(T.lineObjs(T.d.work, 0));
+  ok(/class="cm del num"/.test(html) && /class="cm ins num"/.test(html),
+     'the inline mark carries the num class');
+  T.v = 'final'; T.li = {};
+  ok(!/num/.test(T.blocks(T.lineObjs(T.d.work, 0))),
+     'and not in Final, where there is no mark to annotate');
+  T.v = 'markup';
 }
 
 // ===== 15. the version in the page and in the changelog must agree =====
