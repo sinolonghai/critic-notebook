@@ -225,6 +225,55 @@ The page has a one-click **Accept all** in the status bar. A 116-mark document w
 invented figures is exactly the case where that button writes plausible nonsense into a file
 and nobody notices. Two entries went onto the to-do list for it.
 
+### ChatGPT, 2026-11-13, English document through Code Interpreter
+
+Passes, one warning. 39 marks, density 10.4, **and not one replacement changes a number** —
+against 35 on the Chinese document from the same assistant an hour earlier. Rule 5 held: the
+python fence came through byte for byte.
+
+Its comments are the best of any run: they ask for the affected run and the expected and
+actual row counts, they point out that a 0 in a *Rows lost* column could mean two different
+things, they note that raising a limit does not bound the next oversized partition. Those are
+the questions a careful reviewer asks.
+
+**Its replacements drain the prose.** Four of eleven make the document vaguer:
+
+| It replaced | With |
+| --- | --- |
+| `raise the memory limit` | `adjust memory handling` |
+| `the argument against patching` | `an argument for a correctness safeguard` |
+| `fix the architecture that made silent truncation possible` | `establish the cause of silent truncation or fix it` |
+| `That difference is most of the argument for B` | `Any stronger publication and recovery guarantees would be an argument…` |
+
+The first is specific traded for empty. The second changes the author's position: the note
+says case 3 is *the argument against patching*, and the replacement makes it a mild argument
+*for* something else. This is the opposite complaint from WorkBuddy's one bad edit, which cut
+a word for concision — and like that one, no check can see it. There is no mechanical signal
+for "this makes the writing worse". Granularity of 63 characters per edit with little shared
+text between the two sides is the shape of rewriting rather than correcting, but it is a shape,
+not a verdict.
+
+#### The experiment this round did not run
+
+Fabrication appeared on the Chinese document and not the English one, and the two runs differ
+on two axes at once:
+
+| | characters | numbers | per 1,000 | table rows | delivery |
+| --- | --- | --- | --- | --- | --- |
+| English | 3,733 | 21 | 5.6 | 5 | Code Interpreter, file in and out |
+| Chinese | 6,113 | 444 | 72.6 | 55 | plain chat, document reprinted |
+
+Thirteen times the numeric density, and 63% of the fabrications landed inside table rows. So
+either reprinting is what invents figures — a model reproducing 55 rows of prices is
+regenerating them, and regenerating a number is where a language model is weakest — or a
+document that dense invites it however the text travels. These data cannot separate the two.
+
+**The run that would: the Chinese document through Code Interpreter.** Same document, same
+numbers, same assistant, delivery as the only difference. If the fabrication disappears, the
+in-place prompt is not merely tidier than the reprint — it is the difference between a
+document whose figures survive and one whose figures are regenerated, which is a much stronger
+reason to prefer it than the whitespace argument it was introduced on.
+
 ### Still to run
 
 ChatGPT (Code Interpreter and Canvas separately — Canvas is an editing surface and may
