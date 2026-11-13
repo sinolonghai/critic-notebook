@@ -1139,6 +1139,12 @@ var docs = [];            /* [{name, label, src, savedSrc, handle, history, scro
 var activeDoc = -1;
 var doc = parse(SAMPLE);
 var savedSrc = SAMPLE;
+/* The document exactly as it sits on disk, newline-normalised. Not savedSrc: what gets
+   written is exportText(), which tidies blank lines and line endings, so savedSrc and the
+   file differ routinely and comparing them would cry wolf. null means unknown — a scratch
+   document, or one whose file could not be read — and the check is then skipped. */
+var diskText = null;
+function normDisk(t){ return t.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'); }
 var fileHandle = null;
 var history = [];
 var view = 'markup';
@@ -2459,7 +2465,7 @@ function pruneSample(){
 function syncRecord(){
   var r = docs[activeDoc];
   if(!r) return;
-  r.src = doc.src; r.savedSrc = savedSrc; r.history = history;
+  r.src = doc.src; r.savedSrc = savedSrc; r.history = history; r.diskText = diskText;
   r.handle = fileHandle; r.scrollTop = center.scrollTop;
 }
 /* keep the filename visible: a long path is trimmed from the left, never the right */
@@ -2494,6 +2500,7 @@ function activate(i){
   var r = docs[i];
   doc = parse(r.src);
   savedSrc = r.savedSrc; history = r.history || []; fileHandle = r.handle || null;
+  diskText = r.diskText === undefined ? null : r.diskText;
   openCell = null; insertAt = null; draft = ''; draftBase = ''; rowCache = []; lit = null;
   noteEdit = null;
   hidePop();
@@ -2559,7 +2566,8 @@ function openDoc(text, name, handle, path, key){
   key = key || ('loose:' + name);
   var same = findDoc(key);
   var rec = { key: key, name: name || 'untitled.md', path: path || '', label: name, src: src,
-              savedSrc: src, handle: handle || null, history: [], scrollTop: 0, eol: eol };
+              savedSrc: src, handle: handle || null, history: [], scrollTop: 0, eol: eol,
+              diskText: handle ? src : null };
   if(same >= 0){ docs[same] = rec; activeDoc = -1; activate(same); }
   else { docs.push(rec); activeDoc = -1; activate(docs.length - 1); }
   center.scrollTop = 0;
@@ -2672,8 +2680,9 @@ function suggestName(){
 }
 var MD_TYPES = [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.mdown'], 'text/plain': ['.txt'] } }];
 
-function afterSave(name){
+function afterSave(name, written){
   savedSrc = doc.src;
+  if(written !== undefined) diskText = normDisk(written);
   syncRecord();
   var r = docs[activeDoc];
   if(r) files.forEach(function(f){
@@ -2682,14 +2691,57 @@ function afterSave(name){
   paintStatus(); paintDocList();
   toast('Saved to ' + name);
 }
+function writeHandle(text){
+  return fileHandle.createWritable()
+    .then(function(w){ return w.write(text).then(function(){ return w.close(); }); })
+    .then(function(){ afterSave(fileHandle.name, text); return true; })
+    .catch(function(){ return pickAndSave(text); });
+}
+/* Nothing locks the file. A second tab, another editor, a sync client — any of them can have
+   rewritten it since it was opened, and writing would throw that away without a word. So read
+   it back and compare before writing. Content, not a timestamp: these are small files, and an
+   exact comparison neither misses a change nor invents one. */
+function staleOnDisk(){
+  if(diskText === null) return Promise.resolve(null);
+  return fileHandle.getFile()
+    .then(function(f){ return f.text(); })
+    .then(function(t){ t = normDisk(t); return t === diskText ? null : t; })
+    .catch(function(){ return null; });   /* unreadable: let the write report the real error */
+}
+function askStale(onDisk, text){
+  var name = fileHandle.name;
+  var v = openPanel({
+    narrow: true,
+    title: 'Changed on disk',
+    body: '<p class="hint"><b>' + esc(name) + '</b> is not what it was when you opened it — ' +
+          'something else has written to it since. Saving now replaces all of that with your ' +
+          'copy.</p>',
+    foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
+          '<button type="button" class="btn" data-x="diff">See what changed</button>' +
+          '<button type="button" class="btn" data-x="as">Save as…</button>' +
+          '<button type="button" class="btn danger" data-x="over">Overwrite</button>'
+  });
+  return new Promise(function(done){
+    function on(x, fn){ v.querySelector('[data-x="' + x + '"]').addEventListener('click', fn); }
+    on('cancel', function(){ v.remove(); done(false); });
+    on('diff', function(){
+      v.remove();
+      /* the file on disk is the older side, so the diff reads as what overwriting would do */
+      compareWith = { key: 'disk:' + name, name: name + ' (on disk)', src: onDisk };
+      setView('compare');
+      done(false);
+    });
+    on('as', function(){ v.remove(); done(pickAndSave(text)); });
+    on('over', function(){ v.remove(); done(writeHandle(text)); });
+  });
+}
 function saveFile(){
   flushEditor();
   var text = exportText();
   if(CAN_FS && fileHandle){
-    return fileHandle.createWritable()
-      .then(function(w){ return w.write(text).then(function(){ return w.close(); }); })
-      .then(function(){ afterSave(fileHandle.name); return true; })
-      .catch(function(){ return pickAndSave(text); });
+    return staleOnDisk().then(function(onDisk){
+      return onDisk === null ? writeHandle(text) : askStale(onDisk, text);
+    });
   }
   if(CAN_FS) return pickAndSave(text);
   if(CAN_DL){ downloadText(text); return Promise.resolve(true); }
@@ -2747,7 +2799,7 @@ function pickAndSave(text){
       }).then(function(){
         return adoptHandle(h);
       }).then(function(){
-        afterSave(h.name);
+        afterSave(h.name, text);
         return true;
       });
     })

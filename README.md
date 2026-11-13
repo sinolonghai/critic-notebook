@@ -438,6 +438,13 @@ Putting the model back inside that step undoes it.
 - **Re-editing a block re-derives its marks**, which drops the anchors of comments on it. The
   comment text is preserved and moved to the end of the block.
 - **Tables are edited as Markdown source**, pipes and all, not as a grid.
+- **Nothing locks the file.** Word takes the file for itself while you have it open; a browser
+  has no way to. What the tool does instead is notice: a save re-reads the file first, and if
+  it is no longer what was opened — a second tab, another editor, a sync client — it stops and
+  offers **See what changed**, **Save as…** or **Overwrite** rather than writing over work it
+  cannot see. Detection covers one case locking never would, which is the same file open in
+  something that is not this tool. Choosing Overwrite still discards the other copy; that is
+  what it means.
 - No real-time collaboration. Two people reviewing the same file exchange the file.
 
 ## Problems and questions

@@ -18,6 +18,13 @@
   the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
   GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
   quirks mode shifts content about 3px; nothing else moves.
+- A save no longer overwrites a file that changed underneath it. Nothing locks a file the way
+  Word does, and a browser cannot, so saving now reads the file back first and compares it
+  with what was last read or written — content, not a timestamp, which for files this size
+  neither misses a change nor invents one. If it moved, the write stops and offers **See what
+  changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
+  reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
+  one file meant the second save silently destroyed the first.
 - README gains a prompt for having a model mark a document up in CriticMarkup, and the one
   check worth doing on what comes back: the **Original** view should read as the document you
   started with, because an edit made outside a mark destroys the original silently. The prompt
