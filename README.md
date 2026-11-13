@@ -16,17 +16,39 @@ itself, so the revisions travel with the file and stay readable in any editor.
 
 ## Why
 
-Markdown has no notion of tracked changes. The usual answers are unsatisfying:
+Most office work used to happen in Word, and track changes is a large part of why. A document
+goes back and forth; each person's edits stay visible and reversible; the last pass is someone
+reading *what changed* rather than reading the whole thing again.
 
-- **Word / Google Docs** have real track-changes, but the revisions live in their format. Export
-  to Markdown and you get the final text with the history stripped off.
-- **`git diff`** is line-based. Soft-wrapped prose shows up as "this whole paragraph changed."
+The work has moved and that habit has not. Ask an AI to draft a document, restructure one or
+tighten a section, and what comes back is Markdown — plain text is what models handle most
+reliably and what survives being passed between tools. The output is usually good and almost
+never final. It needs a human pass, often a careful one: the model rewrote more than it was
+asked to, or quietly changed a figure, or smoothed away a qualifier that was doing real work.
+
+So you are holding two versions of a document with no good way to see what moved between them.
+Markdown has no notion of tracked changes, and the usual answers are unsatisfying:
+
+- **Word / Google Docs** have real track changes, but the revisions live in their format. Export
+  to Markdown and you get the final text with the history stripped off — so every AI pass means
+  converting out and back, which is where the tracking dies.
+- **`git diff`** is line-based. Soft-wrapped prose comes out as "this whole paragraph changed",
+  which is useless in exactly the case you cared about: three words moved inside it.
 - **CriticMarkup** solves the file format — `{++added++}`, `{--removed--}`, `{~~old~>new~~}` —
   but writing those delimiters by hand is tedious, and the existing tooling is editor plugins
   (Obsidian, VS Code, MultiMarkdown Composer) that each reviewer has to install first.
 
-This fills that last gap: a reviewer who has never heard of CriticMarkup opens one file,
-edits text normally, and produces correct markup.
+This fills that gap. There are two ways in:
+
+- **Ask the AI to edit in CriticMarkup.** It writes the marks, you open the file here, and you
+  take or drop each suggestion one at a time — the same loop as reviewing a colleague. This
+  works today.
+- **Keep the before and the after.** Open one, point **Compare** at the other, and the
+  difference is shown block by block and word by word, with blocks aligned first so one
+  inserted paragraph does not report the whole file as changed. Read-only for now; turning a
+  comparison back into accept-or-reject suggestions is the first item under [To do](#to-do).
+
+Either way the reviewer never has to learn CriticMarkup to review in it.
 
 ## Getting it
 
@@ -291,7 +313,7 @@ for folders no longer in that history is pruned with it, so the keys do not accu
 In Chrome every `file://` page shares one storage bucket, so moving `critic-notebook.html` to another
 directory keeps all of it. Clearing site data, or a private window, starts over.
 
-## Later
+## To do
 
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
@@ -306,8 +328,10 @@ accept-all is the newer. Mostly reassembly, plus the newline rules whole-documen
 a *new commit*, never a revert: prose is exactly the case where you accept one paragraph and
 reject the next, so "go back to version N" is the wrong shape for the problem.
 
-**Combine two reviewers' copies.** Word's *Combine*, and a different thing entirely: two people
-each edited the same original, and both sets of changes merge into one document with each
+**Combine two reviewers' copies.** Reviewing *in turn* already works: each person signs with a
+name, their suggestions and comments carry it in the file, and whoever opens it next can take,
+drop or reply to what the last one left. Missing is Word's *Combine* — two people who edited the
+same original **in parallel**, both sets of changes merged into one document with each
 attributed. Needs a common ancestor — `git merge-base` where there is a repo, and asking
 otherwise — and a way to show a genuine conflict, which CriticMarkup has no syntax for. Worth
 designing only once two people are actually editing the same file.

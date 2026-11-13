@@ -18,7 +18,9 @@
   the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
   GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
   quirks mode shifts content about 3px; nothing else moves.
-- README gains a **Later** section recording what is planned and what makes each piece hard.
+- README gains a **To do** section recording what is planned and what makes each piece hard,
+  and a **Why** that starts from the case this tool exists for: an AI edits a Markdown document
+  and a human has to see what it changed.
 - Fixes a parser bug the compare work surfaced, latent in the editor all along: a mark whose
   text contains one backtick — which a diff produces as soon as formatting changes — left a
   stray backtick that paired with the next one in the document, and the inline-code span that
