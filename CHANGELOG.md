@@ -25,6 +25,9 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
+- The tutorial says that it is one, and the two ways out of it are a row of buttons above the
+  document rather than only in a side pane a first-time reader has no reason to have looked
+  at. Both disappear once a real file is open.
 - README opens with a recording of the loop it describes — edit a paragraph as prose, watch
   the word diff form under the editor, commit, accept.
 - README gains a prompt for having an AI mark a document up in CriticMarkup, and the one

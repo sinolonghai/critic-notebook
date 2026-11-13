@@ -188,6 +188,20 @@ button,input,textarea{font:inherit;color:inherit}
   border-bottom-width:2px;border-radius:4px;padding:0 4px}
 .nb{max-width:47rem;margin:0 auto;padding:4px 16px 50vh}
 
+/* Shown only while the tutorial is what is open: the two things a new reader should do
+   next are otherwise buttons in a side pane they have no reason to have looked at yet.
+   display:flex would beat the UA rule for [hidden], so hiding is spelled out. */
+.start{max-width:47rem;margin:14px auto 2px;padding:11px 15px;display:flex;align-items:center;
+  gap:11px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--rule-strong);
+  border-radius:10px;box-shadow:var(--shadow)}
+.start[hidden]{display:none}
+.start .lbl{flex:1 1 14rem;min-width:0;font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+.start .lbl b{color:var(--ink);font-weight:600}
+.start button{flex:0 0 auto;border:1px solid var(--accent);background:var(--surface);
+  color:var(--accent);border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:500;
+  cursor:pointer;white-space:nowrap}
+.start button:hover{background:var(--accent-soft)}
+
 .gap{height:16px;position:relative;display:flex;align-items:center;justify-content:center}
 .gap button{opacity:0;transition:opacity .12s;border:1px dashed var(--rule-strong);background:var(--paper);
   color:var(--ink-faint);border-radius:999px;font-size:11px;line-height:1;padding:3px 13px;cursor:pointer;font-family:var(--mono)}
@@ -475,6 +489,12 @@ button,input,textarea{font:inherit;color:inherit}
       <p class="lead" id="lead"><b>Click any block</b> to edit its text; what you changed is recorded as a
       tracked suggestion. Opening another block commits the one you were in — <kbd>Esc</kbd> discards
       instead. Select a phrase to leave a comment. <kbd data-mod="Z">⌘Z</kbd> undoes anything.</p>
+      <div class="start" id="start" hidden>
+        <span class="lbl"><b>This is the tutorial.</b> Nothing in it is written to disk.
+        Open your own writing to review it for real.</span>
+        <button type="button" id="start-folder">Open folder</button>
+        <button type="button" id="start-file">Open file</button>
+      </div>
       <div class="nb" id="nb"></div>
     </main>
 
@@ -513,8 +533,7 @@ var app = document.getElementById('app');
 var SAMPLE = [
 '# Tutorial',
 '',
-'This document is a scratch pad. Nothing here is written to disk — reload the page and it',
-'comes back. Open a folder on the left to work on real files.',
+'**This is a tutorial** — a scratch pad for trying the editor out. Nothing here is written to disk, and reloading the page brings it back. When you want to work on your own writing, use **Open folder** or **Open file**: the two buttons above this document, or the same two in the bar at the top.',
 '',
 '## Editing',
 '',
@@ -1526,6 +1545,10 @@ function paintSaveState(){
     : !canSave() ? 'No changes to save'
     : CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Download the .md (' + MOD + 'S)' : 'Copy the markdown (' + MOD + 'S)';
 }
+function paintStart(){
+  var r = docs[activeDoc];
+  document.getElementById('start').hidden = !(r && r.scratch && view === 'markup');
+}
 function paintStatus(){
   var open = openCount();
   var label = view === 'original' ? 'original' : view === 'final' ? 'final' : 'current';
@@ -1533,6 +1556,7 @@ function paintStatus(){
   document.getElementById('stxt').textContent =
     doc.cells.length + ' blocks · ' + open + ' open suggestion' + (open === 1 ? '' : 's') +
     ' · ' + wordCount(body) + ' words ' + label;
+  paintStart();
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
   document.getElementById('btn-undo').disabled = history.length === 0;
   document.getElementById('btn-all-yes').disabled = !open || view === 'compare';
@@ -2375,6 +2399,7 @@ function setView(name){
   });
   hidePop(); lit = null;
   document.getElementById('lead').hidden = view !== 'markup';
+  paintStart();
   if(view !== 'compare') compareRowsCache = [];
   rowCache = [];
   render();
@@ -2870,6 +2895,13 @@ document.getElementById('btn-open').hidden = !CAN_DIR;
 document.getElementById('btn-open').title = 'Pick a folder; its markdown files are listed on the left';
 document.getElementById('btn-openfile').addEventListener('click', openSingleFile);
 document.getElementById('btn-openfile').title = 'Open one file on its own';
+document.getElementById('start-folder').addEventListener('click', function(){
+  document.getElementById('btn-open').click();
+});
+document.getElementById('start-file').addEventListener('click', function(){
+  document.getElementById('btn-openfile').click();
+});
+document.getElementById('start-folder').hidden = !CAN_DIR;
 document.getElementById('btn-save').addEventListener('click', function(){ saveFile(); });
 var saveAsBtn = document.getElementById('btn-saveas');
 saveAsBtn.hidden = !CAN_FS;
