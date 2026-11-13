@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-13
+
+Reviewing a document an AI changed, which is what the first version turned out to be for.
+Three assistants were run against the prompt below and judged rather than read; the results
+are in [docs/model-notes.md](docs/model-notes.md).
+
+**Comparing two versions**
 
 - **Compare** tab: diff the open document against another file, or an earlier version of it,
   rendered in the same marks the editor uses. Blocks are aligned by LCS before being diffed, so
@@ -11,13 +17,23 @@
   dialog and so reaches a copy that lives nowhere near the folder you opened.
 - `tools/history.mjs` exports a file's past versions into `history/` for the Compare tab, so
   git history is read by git rather than by a packfile parser in the browser.
-- The page now carries its own document head — doctype, `<meta charset="utf-8">`, viewport.
-  It had none: the artifact host wraps uploads in a skeleton and macOS Chrome guesses UTF-8
-  for local files, so both environments hid it. Downloaded and opened from disk, which is
-  what the README tells people without git to do, the file rendered in quirks mode and left
-  the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
-  GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
-  quirks mode shifts content about 3px; nothing else moves.
+
+**Reviewing**
+
+- The cell editor turns the browser's spell checker back on. It holds prose — the marks are
+  resolved away before the text reaches it — so underlines land on words rather than on
+  CriticMarkup delimiters. The paste and export boxes, which hold raw markdown, keep it off.
+- A selection can be copied. It could not be: the popover that opens on a selection focused
+  its comment input, which collapsed the selection, so the copy shortcut had nothing to act on
+  and the only way to lift text out of a document was to open the block for editing and copy
+  from the textarea. The popover now asks first — Copy or Comment — and focuses nothing until
+  Comment is chosen, which restores the shortcut by itself. Copying resolves the marks instead
+  of yielding the rendered text, where a replacement reads as `threenineteen`, and it is
+  offered for selections that cannot be commented on at all, which is most of the ones worth
+  copying once a document has been marked up.
+
+**Files**
+
 - A save no longer overwrites a file that changed underneath it. Nothing locks a file the way
   Word does, and a browser cannot, so saving now reads the file back first and compares it
   with what was last read or written — content, not a timestamp, which for files this size
@@ -25,6 +41,33 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
+- The page now carries its own document head — doctype, `<meta charset="utf-8">`, viewport.
+  It had none: the artifact host wraps uploads in a skeleton and macOS Chrome guesses UTF-8
+  for local files, so both environments hid it. Downloaded and opened from disk, which is
+  what the README tells people without git to do, the file rendered in quirks mode and left
+  the encoding to the browser's guess — on a Windows machine with a CJK locale that guess is
+  GBK, and every `→`, `‡` and Chinese character in the document becomes mojibake. Leaving
+  quirks mode shifts content about 3px; nothing else moves.
+- Saving works from a hosted copy in browsers without the File System Access API. The download
+  path tested for `file://` or localhost by name, so a Firefox or Safari visitor to a project
+  page was offered Copy and nothing else; it now asks the browser whether the origin is
+  trusted. An `index.html` redirects to the tool, since GitHub Pages serves the site root.
+
+**Working with an AI**
+
+- README gains a prompt for having an AI mark a document up in CriticMarkup, and the one
+  check worth doing on what comes back: the **Original** view should read as the document you
+  started with, because an edit made outside a mark destroys the original silently. The prompt
+  is tested rather than asserted — its output is parsed by the real page and asserted to
+  reject back to the source file byte for byte.
+- `tools/check-markup.mjs` judges a document an assistant marked up: it asserts that rejecting
+  every suggestion reproduces the original byte for byte, and names the rule behind a failure
+  rather than printing a diff — rewrapped text, a newline outside a mark, CJK spacing padded,
+  an excerpt in place of the document. It runs the page's own parser, so what the tool accepts
+  is the definition of correct, and it exits non-zero, so comparing assistants on one document
+  is a loop rather than a reading exercise. The silent failures are the point: a paragraph
+  quietly rewrapped still renders correctly and still carries its marks, and has taken the
+  original with it.
 - The judge measures rule 3 by how much of a replacement is identical on both sides, not by
   how long the mark is. A replacement that keeps 37 of its 47 characters the same to change
   two words is mostly ballast, and the page strikes the whole old text beside the whole new
@@ -36,53 +79,37 @@
   a thorough note read as a coarse edit, and the coarseness warning fired on a legitimately
   inserted paragraph — a paragraph added or removed is one mark because there is nothing inside
   it to diff, and only a paragraph swapped hides which words moved.
-- `tools/check-markup.mjs` judges a document an assistant marked up: it asserts that rejecting
-  every suggestion reproduces the original byte for byte, and names the rule behind a failure
-  rather than printing a diff — rewrapped text, a newline outside a mark, CJK spacing padded,
-  an excerpt in place of the document. It runs the page's own parser, so what the tool accepts
-  is the definition of correct, and it exits non-zero, so comparing assistants on one document
-  is a loop rather than a reading exercise. The silent failures are the point: a paragraph
-  quietly rewrapped still renders correctly and still carries its marks, and has taken the
-  original with it.
-- A selection can be copied. It could not be: the popover that opens on a selection focused
-  its comment input, which collapsed the selection, so the copy shortcut had nothing to act on
-  and the only way to lift text out of a document was to open the block for editing and copy
-  from the textarea. The popover now asks first — Copy or Comment — and focuses nothing until
-  Comment is chosen, which restores the shortcut by itself. Copying resolves the marks instead
-  of yielding the rendered text, where a replacement reads as `threenineteen`, and it is
-  offered for selections that cannot be commented on at all, which is most of the ones worth
-  copying once a document has been marked up.
+
+**Finding your way in**
+
 - The tutorial says that it is one, and the two ways out of it are a row of buttons above the
   document rather than only in a side pane a first-time reader has no reason to have looked
   at. Both disappear once a real file is open.
 - README opens with a recording of the loop it describes — edit a paragraph as prose, watch
   the word diff form under the editor, commit, accept.
-- README gains a prompt for having an AI mark a document up in CriticMarkup, and the one
-  check worth doing on what comes back: the **Original** view should read as the document you
-  started with, because an edit made outside a mark destroys the original silently. The prompt
-  is tested rather than asserted — its output is parsed by the real page and asserted to
-  reject back to the source file byte for byte.
-- Saving works from a hosted copy in browsers without the File System Access API. The download
-  path tested for `file://` or localhost by name, so a Firefox or Safari visitor to a project
-  page was offered Copy and nothing else; it now asks the browser whether the origin is
-  trusted. An `index.html` redirects to the tool, since GitHub Pages serves the site root.
-- The cell editor turns the browser's spell checker back on. It holds prose — the marks are
-  resolved away before the text reaches it — so underlines land on words rather than on
-  CriticMarkup delimiters. The paste and export boxes, which hold raw markdown, keep it off.
+- A social preview card, so a link to the repository stops rendering as GitHub's grey default,
+  with the page that generates it committed beside it — the card carries the project URL and
+  would go stale with no way to remake it.
+- README gains a **To do** section recording what is planned and what makes each piece hard,
+  and a **Why** that starts from the case this tool exists for: an AI edits a Markdown document
+  and a human has to see what it changed.
 - **To do** records the direction the day arrived at: a panel beside an assistant, which needs
   the document handed in and out through whatever opened the page, because a browser page
   cannot be given a path. The entry that asked whether AI belonged inside the editor is marked
   decided against, with the reason — the tool wants to be inside an assistant rather than host
   one, and that inversion dissolves the credential problem instead of working around it.
-- README gains a **To do** section recording what is planned and what makes each piece hard,
-  and a **Why** that starts from the case this tool exists for: an AI edits a Markdown document
-  and a human has to see what it changed.
+
+**Fixed**
+
 - Fixes a parser bug the compare work surfaced, latent in the editor all along: a mark whose
   text contains one backtick — which a diff produces as soon as formatting changes — left a
   stray backtick that paired with the next one in the document, and the inline-code span that
   resulted swallowed the following mark. Code spans and fences are now found on a copy with
   marks blanked out.
 
+**Still not 1.0**, and for a new reason. The file format was already stable and still is;
+what moved is the shape of the thing around it. This release learned that the tool belongs
+in a panel beside an assistant rather than holding one, and nothing of that is built yet.
 ## 0.1.0 — 2026-11-12
 
 First tagged version. Usable end to end: open a folder, review and edit its markdown,
