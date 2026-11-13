@@ -174,7 +174,8 @@ that block.
 | Discard an edit in progress | `Esc` |
 | Add a block | `+ new block` in the gap between cells |
 | Delete a block | Click it, clear the text, click away |
-| Comment on a phrase | Select it, type the comment |
+| Comment on a phrase | Select it, choose **Comment**, type it |
+| Copy a phrase | Select it, choose **Copy** — or just press the copy shortcut |
 | Edit or delete a comment | Click the comment text; empty it to remove it |
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Undo anything | `⌘Z` (80 steps) |
@@ -198,6 +199,20 @@ For grammar there is nothing to install here either: Grammarly, LanguageTool and
 in any text box, including this one. Opening the tool as a local file is the one catch — an
 extension has to be allowed to run on `file://` pages, which is a switch on the extension's own
 settings page, off by default.
+
+### Copying out of a document
+
+Selecting a phrase offers **Copy** as well as **Comment**, and the copy shortcut works on its
+own. Both resolve the suggestions in what you selected rather than handing you the rendered
+text, where a replacement reads as the old and new words run together — `threenineteen`. You
+get the passage as the view reads it: as proposed, or as the original in the **Original** view.
+A selection that takes in a suggestion cannot be commented on, because a comment has to anchor
+to plain text, but it can still be copied.
+
+This is the way out of the loop when you want a passage rewritten rather than tweaked: copy it,
+hand it to whoever or whatever is going to rewrite it, and paste the result back into the block.
+The editor diffs what you paste against the original, so it arrives as one tracked suggestion
+like any other.
 
 ### How edits are recorded
 
@@ -395,15 +410,6 @@ starts over.
 
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
-
-**Let a selection be copied, not only commented on.** Selecting a phrase opens the comment
-popover, and the popover focuses its input, which collapses the selection — so `⌘C` has
-nothing to copy, and the only way to get the text out is to open the block for editing and
-copy from the textarea. The popover should offer the choice, Copy or Comment, and leave the
-input unfocused until Comment is chosen. That one change covers both halves of the problem:
-with the selection left where it was, the keyboard shortcut starts working again on its own,
-and the Copy button needs nothing new — the popover is already holding the text, since it
-displays it.
 
 **Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
 only draws them. Writing the result back out gives a third document whose differences *are*

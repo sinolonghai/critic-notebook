@@ -381,6 +381,7 @@ button,input,textarea{font:inherit;color:inherit}
 .pop .sel{font-family:var(--doc);font-size:12.5px;color:var(--ink-soft);margin:0 2px 7px;
   max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pop .row{display:flex;gap:5px;flex-wrap:wrap}
+.pop .row{display:flex;gap:5px;flex-wrap:wrap}
 .pop .row button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:6px;
   padding:5px 10px;font-size:12.5px;cursor:pointer;white-space:nowrap}
 .pop .row button:hover{border-color:var(--accent);color:var(--accent)}
@@ -2307,10 +2308,12 @@ function selRange(){
   if(!hits.length) return null;
   var A = wToSrc(hits[0].o), last = hits[hits.length - 1], B = wToSrc(last.o + last.len);
   if(!A || !B) return null;
-  if(A.seg !== B.seg) return { err: 'cross' };
   if(B.src <= A.src) return null;
+  /* A comment has to anchor to one unmarked, single-line run; copying does not, so the
+     offsets come back either way and only the comment half is refused. */
+  if(A.seg !== B.seg) return { a: A.src, b: B.src, err: 'cross' };
   var text = doc.src.slice(A.src, B.src);
-  if(/\n/.test(text)) return { err: 'line' };
+  if(/\n/.test(text)) return { a: A.src, b: B.src, err: 'line' };
   return { a: A.src, b: B.src, text: text };
 }
 
@@ -2327,34 +2330,95 @@ function placePop(){
 }
 function clip(s, n){ s = String(s).replace(/\s+/g, ' '); return s.length > n ? s.slice(0, n) + '…' : s; }
 
+/* What a copy should yield. A selection that crosses a suggestion renders as the old text and
+   the new text butted together — "threenineteen" — which is no use to anyone, least of all to
+   an assistant being asked to rewrite the passage. So copying resolves the marks the way the
+   current view reads: Original gives what was there, every other view gives what is proposed. */
+function copyMode(){ return view === 'original' ? 'orig' : 'prop'; }
+function copyOf(range){
+  if(!range || range.a === undefined) return '';
+  return resolveRange(range.a, range.b, copyMode());
+}
+function copyNote(range, text){
+  if(!range || range.a === undefined) return 'Copied';
+  if(doc.src.slice(range.a, range.b) === text) return 'Copied';
+  return copyMode() === 'orig' ? 'Copied, as the original' : 'Copied, as proposed';
+}
+function legacyCopy(text){
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+  document.body.appendChild(ta);
+  var sel = window.getSelection();
+  var saved = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+  ta.select();
+  var ok = false;
+  try{ ok = document.execCommand('copy'); }catch(e){}
+  ta.remove();
+  /* the textarea had to take the selection to be copied from; give it back */
+  if(saved && sel){ try{ sel.removeAllRanges(); sel.addRange(saved); }catch(e){} }
+  return ok;
+}
+function toClipboard(text){
+  if(!text) return Promise.resolve(false);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).then(function(){ return true; },
+                                                    function(){ return legacyCopy(text); });
+  }
+  return Promise.resolve(legacyCopy(text));
+}
+
 function openPop(range, rect){
   hidePop();
   pop = document.createElement('div');
   pop.className = 'pop';
   pop.setAttribute('role', 'dialog');
-  pop.setAttribute('aria-label', 'Comment on the selected text');
+  pop.setAttribute('aria-label', 'What to do with the selected text');
   pop.addEventListener('mousedown', function(ev){ if(ev.target.tagName !== 'INPUT') ev.preventDefault(); });
   document.body.appendChild(pop);
   popRect = rect;
 
-  if(range.err){
-    pop.innerHTML = '<p class="err">' +
-      (range.err === 'cross' ? 'That selection already contains a suggestion. Pick plain text.'
-                             : 'Keep the selection on one line.') +
-      '</p><div class="row"><button type="button" data-x="close">OK</button></div>';
-    pop.querySelector('[data-x="close"]').addEventListener('click', hidePop);
-    placePop();
-    return;
-  }
+  /* The chooser comes first, and renders no input. Focusing one would collapse the
+     selection, which is why copying used to be impossible: the shortcut had nothing left to
+     act on and the only way out was to open the block for editing. */
+  var preview = range.text !== undefined ? range.text : copyOf(range);
   pop.innerHTML =
-    '<p class="sel">“' + esc(clip(range.text, 38)) + '”</p>' +
-    '<label for="pn">Comment</label><input type="text" id="pn" autocomplete="off" placeholder="what should change, and why">' +
+    '<p class="sel">“' + esc(clip(preview, 38)) + '”</p>' +
+    (range.err ? '<p class="err">' +
+      (range.err === 'cross' ? 'A comment has to anchor to plain text, and this selection takes in a suggestion.'
+                             : 'A comment has to stay on one line.') + '</p>' : '') +
     '<div class="row"><button type="button" data-x="close">Cancel</button>' +
-    '<button type="button" class="go" data-x="go">Add comment</button></div>';
-  var input = pop.querySelector('#pn');
+    '<button type="button" data-x="copy">Copy</button>' +
+    (range.err ? '' : '<button type="button" class="go" data-x="comment">Comment</button>') +
+    '</div>';
   placePop();
-  input.focus();
-  function go(){
+  pop.querySelector('[data-x="close"]').addEventListener('click', hidePop);
+  pop.querySelector('[data-x="copy"]').addEventListener('click', function(){
+    var text = copyOf(range);
+    toClipboard(text).then(function(ok){
+      hidePop();
+      toast(ok ? copyNote(range, text) : 'Could not reach the clipboard — try ' + MOD + 'C');
+    });
+  });
+  if(range.err) return;
+  pop.querySelector('[data-x="comment"]').addEventListener('click', commentForm);
+
+  function commentForm(){
+    pop.innerHTML =
+      '<p class="sel">“' + esc(clip(range.text, 38)) + '”</p>' +
+      '<label for="pn">Comment</label><input type="text" id="pn" autocomplete="off" placeholder="what should change, and why">' +
+      '<div class="row"><button type="button" data-x="close">Cancel</button>' +
+      '<button type="button" class="go" data-x="go">Add comment</button></div>';
+    var input = pop.querySelector('#pn');
+    placePop();
+    input.focus();
+    pop.querySelector('[data-x="go"]').addEventListener('click', go);
+    pop.querySelector('[data-x="close"]').addEventListener('click', hidePop);
+    input.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter'){ ev.preventDefault(); go(); }
+      if(ev.key === 'Escape'){ ev.preventDefault(); hidePop(); }
+    });
+    function go(){
     var note = scrub(input.value.trim()).replace(/\s*\n\s*/g, ' ');
     if(!note){ input.focus(); return; }
     var who = authorName();
@@ -2362,16 +2426,30 @@ function openPop(range, rect){
     hidePop();
     var sel = window.getSelection();
     if(sel && sel.removeAllRanges) sel.removeAllRanges();
-    editSource(range.a, range.b, repl);
-    toast('Comment added');
+      editSource(range.a, range.b, repl);
+      toast('Comment added');
+    }
   }
-  pop.querySelector('[data-x="go"]').addEventListener('click', go);
-  pop.querySelector('[data-x="close"]').addEventListener('click', hidePop);
-  input.addEventListener('keydown', function(ev){
-    if(ev.key === 'Enter'){ ev.preventDefault(); go(); }
-    if(ev.key === 'Escape'){ ev.preventDefault(); hidePop(); }
-  });
 }
+
+/* The keyboard shortcut now has a live selection to act on, so it works on its own — but the
+   browser would put the rendered text on the clipboard, suggestions and all run together.
+   Give it the same resolved text the Copy button produces. */
+document.addEventListener('copy', function(ev){
+  if(openCell !== null || insertAt !== null) return;
+  if(!ev.clipboardData) return;
+  var sel = window.getSelection();
+  if(!sel || !sel.rangeCount || sel.isCollapsed) return;
+  var node = sel.anchorNode;
+  node = node && node.nodeType === 3 ? node.parentNode : node;
+  if(!node || !node.closest || !node.closest('#nb .out')) return;
+  var r = selRange();
+  if(!r || r.a === undefined) return;
+  var text = resolveRange(r.a, r.b, copyMode());
+  if(!text || text === doc.src.slice(r.a, r.b)) return;   /* nothing to improve on */
+  ev.clipboardData.setData('text/plain', text);
+  ev.preventDefault();
+});
 function maybePop(){
   if(view !== 'markup' || openCell !== null || insertAt !== null){ hidePop(); return; }
   var sel = window.getSelection();

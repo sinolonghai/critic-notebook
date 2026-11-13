@@ -25,6 +25,14 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
+- A selection can be copied. It could not be: the popover that opens on a selection focused
+  its comment input, which collapsed the selection, so the copy shortcut had nothing to act on
+  and the only way to lift text out of a document was to open the block for editing and copy
+  from the textarea. The popover now asks first — Copy or Comment — and focuses nothing until
+  Comment is chosen, which restores the shortcut by itself. Copying resolves the marks instead
+  of yielding the rendered text, where a replacement reads as `threenineteen`, and it is
+  offered for selections that cannot be commented on at all, which is most of the ones worth
+  copying once a document has been marked up.
 - The tutorial says that it is one, and the two ways out of it are a row of buttons above the
   document rather than only in a side pane a first-time reader has no reason to have looked
   at. Both disappear once a real file is open.
