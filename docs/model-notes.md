@@ -274,6 +274,27 @@ in-place prompt is not merely tidier than the reprint — it is the difference b
 document whose figures survive and one whose figures are regenerated, which is a much stronger
 reason to prefer it than the whitespace argument it was introduced on.
 
+### Where the round left off
+
+Three assistants, five runs, every one passing the invariant. What the round changed:
+
+- The prompt gained **rule 9** — comment on a figure, do not replace it unless the correction
+  follows from the document — which is the one durable answer to the fabrication found here.
+  A prohibition a model cannot check itself against became an action it can take.
+- The judge gained five measurements, every one of them because real output went through it:
+  granularity over moved text rather than mark extent, coarseness restricted to replacements,
+  author names printed rather than counted, rule 3 measured by text identical on both sides,
+  and density plus a count of replacements that change a number.
+- Two to-do entries: a changed figure should not look like a changed word, and Accept all
+  should say what it is about to do.
+
+Deferred, and worth coming back to: **the Chinese document through Code Interpreter.** Its
+value is not another score for ChatGPT but the wording of the in-place prompt. That prompt is
+currently argued for on the grounds that a reprint drifts in whitespace. If fabrication turns
+out to be a property of reprinting rather than of dense tables, the argument becomes that a
+reprint regenerates your data — a much stronger claim, and one that applies to every assistant
+that can edit a file.
+
 ### Still to run
 
 ChatGPT (Code Interpreter and Canvas separately — Canvas is an editing surface and may

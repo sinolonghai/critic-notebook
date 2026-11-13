@@ -252,7 +252,17 @@ no preamble, no summary, no diff.
 7. Put a comment immediately after the mark it explains, and sign it:
    {~~a~>b~~}{>>@ai: b is the term section 3 uses<<}
 8. Where you are unsure, leave a comment rather than silently making the change.
+9. A figure is not a wording choice. Do not replace a number unless the correction
+   follows from the document itself; if a number looks wrong, comment on it and leave
+   it as it is.
 ```
+
+Rule 9 earned its place. An assistant returned a document with thirty-five numeric
+replacements, a dozen of them figures in the right shape that follow from nothing — and every
+one was formally correct CriticMarkup, so nothing but reading caught them. "Do not make things
+up" is not a rule a model can check itself against; "comment, do not replace" is. It costs
+none of the good findings: an arithmetic error spotted is still spotted, as a comment, and a
+correction that genuinely follows from the document is still allowed.
 
 Save what comes back as a `.md` and open it, or paste it in with **Paste** in the left pane.
 
