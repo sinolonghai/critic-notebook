@@ -16,17 +16,15 @@ itself, so the revisions travel with the file and stay readable in any editor.
 
 ## Why
 
-Most office work used to happen in Word, and track changes is a large part of why. A document
+In past, most office work used MS Word, and track changes is an essential function of Word, when a document
 goes back and forth; each person's edits stay visible and reversible; the last pass is someone
 reading *what changed* rather than reading the whole thing again.
 
-The work has moved and that habit has not. Ask an AI to draft a document, restructure one or
+The work has moved and that habit has not. Nowadays, if asking an AI to draft a document, restructure one or
 tighten a section, and what comes back is Markdown — plain text is what models handle most
-reliably and what survives being passed between tools. The output is usually good and almost
-never final. It needs a human pass, often a careful one: the model rewrote more than it was
-asked to, or quietly changed a figure, or smoothed away a qualifier that was doing real work.
+reliably and what survives being passed between tools. The output is usually good but never final. It needs a human pass, often a careful one. Of course, you can ask AI to do the editing work, however, sometimes writing an accurate prompt is more complicated than directly editing the file manually. 
 
-So you are holding two versions of a document with no good way to see what moved between them.
+So you are holding two versions of a document with no good way to see what moved between them. 
 Markdown has no notion of tracked changes, and the usual answers are unsatisfying:
 
 - **Word / Google Docs** have real track changes, but the revisions live in their format. Export
