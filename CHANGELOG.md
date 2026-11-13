@@ -25,6 +25,12 @@
   changed**, which opens the on-disk version in the Compare tab as the older side, so the diff
   reads as what overwriting would do; **Save as…**; or **Overwrite**. Previously two tabs on
   one file meant the second save silently destroyed the first.
+- `docs/model-notes.md` records how each assistant does at the prompt, starting with a
+  calibration run whose only claim is to show what a clean result looks like. Using the judge
+  on real output corrected two of its own metrics: granularity was counting comment length, so
+  a thorough note read as a coarse edit, and the coarseness warning fired on a legitimately
+  inserted paragraph — a paragraph added or removed is one mark because there is nothing inside
+  it to diff, and only a paragraph swapped hides which words moved.
 - `tools/check-markup.mjs` judges a document an assistant marked up: it asserts that rejecting
   every suggestion reproduces the original byte for byte, and names the rule behind a failure
   rather than printing a diff — rewrapped text, a newline outside a mark, CJK spacing padded,

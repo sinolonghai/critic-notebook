@@ -198,8 +198,19 @@ if (naive > d.marks.length) {
 /* 4. shape of the markup */
 const byKind = {};
 d.marks.forEach(m => { byKind[KIND[m.t]] = (byKind[KIND[m.t]] || 0) + 1; });
-const spans = marks.map(m => T.spanOf(m) - m.start);
-const widest = marks.length ? marks[spans.indexOf(Math.max(...spans))] : null;
+/* Granularity is about how coarsely the text was edited, so it is measured over edits only.
+   Counting comments would make a model that writes a thorough note look like one that swapped
+   a whole paragraph. */
+const edits = marks.filter(m => m.t === 'ins' || m.t === 'del' || m.t === 'sub');
+/* the text the edit moves, not the mark's extent: spanOf() reaches over an attached comment
+   and the delimiters are not content either */
+const weight = m => (m.rem || '').length + (m.add || '').length;
+const spans = edits.map(weight);
+/* Coarseness is a property of replacements alone. A paragraph added or removed is one mark
+   because there is nothing inside it to diff; a paragraph *swapped* as one mark hides which
+   words moved, and that is the only case worth warning about. */
+const subs = edits.filter(m => m.t === 'sub');
+const widest = subs.length ? subs.reduce((a, b) => weight(b) > weight(a) ? b : a) : null;
 const signed = d.marks.filter(m => m.who).length;
 const comments = d.marks.filter(m => m.t === 'com').length;
 
@@ -208,17 +219,18 @@ console.log(`  marks        : ${d.marks.length}` +
             (d.marks.length ? '  (' + Object.entries(byKind).map(([k, n]) => `${n} ${k}`).join(', ') + ')' : ''));
 if (spans.length) {
   const mean = Math.round(spans.reduce((a, b) => a + b, 0) / spans.length);
-  console.log(`  granularity  : ${mean} characters per mark on average, widest ${Math.max(...spans)}`);
+  console.log(`  granularity  : ${mean} characters per edit on average, widest ${Math.max(...spans)}` +
+              ` (over ${edits.length} edit${edits.length === 1 ? '' : 's'}, comments excluded)`);
 }
 if (comments) console.log(`  attribution  : ${signed ? signed + ' mark(s) carry @name' : 'none of the comments are signed'}`);
 
 /* 5. legal but hard to review */
 if (!d.marks.length) warn('no marks at all — the assistant changed nothing, or changed it without marking it.');
-if (widest && (T.spanOf(widest) - widest.start) > 400) {
+if (widest && weight(widest) > 400) {
   const peek = marked.text.slice(widest.start, widest.start + 70).replace(/\n/g, '\\n');
-  warn(`the widest mark covers ${T.spanOf(widest) - widest.start} characters: ${JSON.stringify(peek)}…` +
-       `\n      A whole paragraph swapped as one replacement parses fine and reviews badly — the` +
-       `\n      reader cannot see which words moved (rule 3).`);
+  warn(`one replacement swaps ${weight(widest)} characters of text: ${JSON.stringify(peek)}…` +
+       `\n      A whole paragraph swapped as a single replacement parses fine and reviews badly —` +
+       `\n      the reader cannot see which words moved (rule 3).`);
 }
 if (/\n{3,}/.test(accepted) || /\n{3,}/.test(rejected)) {
   warn('blank runs of three or more newlines appear after accepting or rejecting; the marks are\n' +

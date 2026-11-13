@@ -278,7 +278,8 @@ comments are signed. Exit status is 0 on pass, so it drops into a script.
 
 It is also how to compare one assistant against another on the same document, which is worth
 doing: following rule 1 means reproducing text verbatim, and models differ at it more than
-they differ at the editing itself.
+they differ at the editing itself. Results as they come in are in
+[docs/model-notes.md](docs/model-notes.md).
 
 ## Comparing two versions
 
