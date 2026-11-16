@@ -314,7 +314,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.3.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.3.1' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -394,7 +394,11 @@ everything and you have the older version; accept everything and you have the ne
 unsaved and attached to no file — nothing should be written to a file on the strength of a
 button that drew a comparison — and a strip above it offers the thing that makes it worth more
 than a report: **Make it the new &lt;file&gt;**, which hands it the identity of the document it
-was made against, so from then on it *is* that file and ⌘S writes it.
+was made against, so from then on it *is* that file and ⌘S writes it. That one asks first,
+because it writes over the file on disk: it says so, says the older side is not touched
+whatever happens, and says how many suggestions are still undecided and would go into the file
+as marks. Until it is saved or adopts a file, a blackline is listed under **not saved to a
+file**, so it is not mistaken for one.
 
 That is how you take individual changes across versions. Reject the suggestions you want to put
 back, accept the rest, save: what comes out is a new version of the file, never a revert to an

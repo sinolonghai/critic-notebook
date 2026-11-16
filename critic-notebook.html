@@ -605,7 +605,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.3.0';
+var VERSION = '0.3.1';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1824,22 +1824,29 @@ function wordCount(s){
 function editorPending(){
   return (openCell !== null || insertAt !== null) && tidy(draft) !== tidy(draftBase);
 }
+function isSample(r){ return !!r && r.key === 'sample'; }
 function canSave(){
   var r = docs[activeDoc];
-  if(!r || r.scratch) return false;
+  /* a blackline is scratch too, but saving it is exactly what it is for: Save offers the
+     dialog. Only the tutorial has nothing worth writing. */
+  if(!r || isSample(r)) return false;
+  /* and a document that is no file yet always has something to write, dirty or not — there
+     is nothing on disk for it to match */
+  if(r.scratch) return true;
   return isDirty() || editorPending();
 }
 function paintSaveState(){
   var b = document.getElementById('btn-save'), r = docs[activeDoc];
   b.disabled = !canSave();
-  b.title = (r && r.scratch) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
+  b.title = isSample(r) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
+    : (r && r.scratch && canSave()) ? 'Write it to a file (' + MOD + 'S)'
     : !canSave() ? 'No changes to save'
     : inHost() ? 'Hand the document back (' + MOD + 'S)'
     : CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Download the .md (' + MOD + 'S)' : 'Copy the markdown (' + MOD + 'S)';
 }
 function paintStart(){
   var r = docs[activeDoc];
-  document.getElementById('start').hidden = !(r && r.scratch && view === 'markup');
+  document.getElementById('start').hidden = !(isSample(r) && view === 'markup');
   /* A blackline arrives detached, because nothing should be written to a file on the strength
      of a button that only drew a comparison. The strip is where it is told what it is and
      offered the one thing that makes it worth more than a report: becoming the next version
@@ -2286,6 +2293,16 @@ function docRows(list){
   }).join('');
 }
 
+/* A document that is no file gets a heading that says so. A blackline arrives in this list
+   looking exactly like the files around it, and the question it raised first was whether it
+   had been written somewhere — it has not, and nothing but the list can say so before the
+   reader goes looking. The tutorial belongs here for the same reason. */
+function unsavedGroup(){
+  var loose = docs.filter(function(r){ return r.scratch; });
+  if(!loose.length) return '';
+  return '<div class="grp" title="These exist only in this tab. Save as… writes one to a file.">' +
+         'not saved to a file</div>' + docRows(loose);
+}
 function paintDocList(){
   var host = document.getElementById('doclist');
   var html = '';
@@ -2299,10 +2316,12 @@ function paintDocList(){
                          : '<div class="pane-empty">No markdown files found in this folder.</div>';
     /* a document open but not inside this folder must stay visible — hiding one with
        unsaved changes is how work gets lost */
-    var outside = docs.filter(function(r){ return !r.path; });
+    var outside = docs.filter(function(r){ return !r.path && !r.scratch; });
     if(outside.length) html += '<div class="grp">not in this folder</div>' + docRows(outside);
+    html += unsavedGroup();
   } else {
-    html += '<div class="grp">open</div>' + docRows(docs);
+    html += '<div class="grp">open</div>' + docRows(docs.filter(function(r){ return !r.scratch; }));
+    html += unsavedGroup();
   }
 
   var hist = folderHistory.filter(function(e){ return e !== currentEntry; });
@@ -2900,8 +2919,8 @@ document.addEventListener('keydown', function(ev){
     ev.preventDefault();
     if(canSave()){ saveFile(); return; }
     var r = docs[activeDoc];
-    toast(r && r.scratch ? 'The tutorial is a scratch pad — use “Save as” to keep it'
-                         : 'No changes to save');
+    toast(isSample(r) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
+                      : 'No changes to save');
     return;
   }
   if((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z' && !inBox && ev.target.tagName !== 'INPUT'){
@@ -3053,6 +3072,7 @@ function openBlackline(){
   var from = cur && { key: cur.key, name: cur.name, path: cur.path, handle: cur.handle,
                       eol: cur.eol, diskText: cur.diskText, older: older };
   openDoc(out.src, name, null, '', 'blackline:' + name);
+  docs[activeDoc].scratch = true;       /* it is no file until it is saved or adopts one */
   if(from) docs[activeDoc].from = from;
   setView('markup');
   render();
@@ -3075,6 +3095,7 @@ function adoptOrigin(){
   r.from = null;
   r.key = f.key; r.name = f.name; r.label = f.name; r.path = f.path;
   r.handle = f.handle || null; r.eol = f.eol; r.diskText = f.diskText;
+  r.scratch = false;        /* it is that file now, and belongs with the files */
   fileHandle = r.handle; diskText = r.diskText === undefined ? null : r.diskText;
   dropDuplicate();
   if(r.path){ expandTo(r.path); saveExpanded(); }
@@ -3397,8 +3418,19 @@ function offerFolderFor(h, homeName){
     pickFolder(h);
   });
 }
+/* Start the dialog where the open pickers start: the file, or the folder. It was the one
+   picker in the page not going through pickerOpts, so it opened wherever the browser last
+   was — Documents — and a blackline saved from a folder landed beside nothing it belongs to,
+   while the page was holding a handle on the folder it came from the whole time. */
 function pickAndSave(text){
-  return window.showSaveFilePicker({ suggestedName: suggestName(), types: MD_TYPES })
+  var opts = pickerOpts({ suggestedName: suggestName(), types: MD_TYPES });
+  return window.showSaveFilePicker(opts)
+    .catch(function(e){
+      /* a handle the browser will no longer start in must not cost the save */
+      if(!opts.startIn || (e && e.name === 'AbortError')) throw e;
+      delete opts.startIn;
+      return window.showSaveFilePicker(opts);
+    })
     .then(function(h){
       return h.createWritable().then(function(w){
         return w.write(text).then(function(){ return w.close(); });
@@ -3483,7 +3515,30 @@ document.getElementById('start-file').addEventListener('click', function(){
   document.getElementById('btn-openfile').click();
 });
 document.getElementById('start-folder').hidden = !CAN_DIR;
-document.getElementById('bl-adopt').addEventListener('click', function(){ adoptOrigin(); });
+document.getElementById('bl-adopt').addEventListener('click', function(){
+  var r = docs[activeDoc], f = r && r.from;
+  if(!f) return;
+  /* Without a handle the browser's own dialog asks where to write, which is confirmation
+     enough. With one, pressing this writes over the file then and there, and the button
+     before it only drew a comparison — so say what it is about to do. */
+  if(!f.handle){ adoptOrigin(); return; }
+  var open = openCount();
+  var v = openPanel({
+    narrow: true,
+    title: 'Make it the new ' + f.name,
+    body: '<p class="hint">This writes over <b>' + esc(f.name) + '</b> on disk with what you ' +
+      'see here, and the document becomes that file — ' + MOD + 'S writes it from then on. ' +
+      esc(f.older) + ' is not touched, whatever you do.</p>' +
+      (open ? '<p class="hint"><b>' + open + '</b> suggestion' + (open === 1 ? ' is' : 's are') +
+        ' still undecided. ' + (open === 1 ? 'It goes' : 'They go') + ' into the file as ' +
+        (open === 1 ? 'a mark' : 'marks') + ', to decide on later — reject everything first ' +
+        'and the file goes back to ' + esc(f.older) + '.</p>' : ''),
+    foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
+          '<button type="button" class="btn primary" data-x="go">Write ' + esc(f.name) + '</button>'
+  });
+  v.querySelector('[data-x="cancel"]').addEventListener('click', function(){ v.remove(); });
+  v.querySelector('[data-x="go"]').addEventListener('click', function(){ v.remove(); adoptOrigin(); });
+});
 document.getElementById('bl-keep').addEventListener('click', function(){
   var r = docs[activeDoc];
   if(r) r.from = null;

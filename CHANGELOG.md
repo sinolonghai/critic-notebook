@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.1 — 2026-11-16
+
+Three things the first hour with a blackline found. All of them are about a document that is
+not a file, which until now the tool had only one of — the tutorial — and never had to say so.
+
+- A document that is no file is listed under **not saved to a file**, instead of sitting in the
+  list looking exactly like the files around it. A blackline arrives there, and the first
+  question it raised was whether it had already been written somewhere. It had not, and nothing
+  but the list could say so before the reader went looking. The tutorial moves there too.
+- **Save** works on one. It was disabled, because saving had meant "write the changes" and a
+  document just opened has none — but with no file on disk there is always something to write,
+  so it offers the dialog. The message when there is nothing to save no longer claims every
+  such document is the tutorial.
+- **Save as…** starts in the folder that is open. It was the one file picker in the page not
+  going through the helper that sets this, so it opened wherever the browser last was —
+  Documents — and a blackline made from a folder was offered a home beside nothing it belongs
+  to, while the page held a handle on the right folder the whole time.
+- **Make it the new &lt;file&gt;** asks first, and says what it is about to do: that it writes
+  over that file on disk, that the older side is not touched whatever happens, and how many
+  suggestions are still undecided and would go into the file as marks. It wrote immediately
+  before, which is a lot to happen on the far side of a button whose predecessor only drew a
+  comparison. Where there is no handle the browser's own dialog asks, so that one goes straight
+  through.
+
 ## 0.3.0 — 2026-11-16
 
 Two versions of a document, and the changes between them taken one at a time. The release
