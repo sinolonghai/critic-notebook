@@ -1056,9 +1056,21 @@ function cellMarks(cell){
 }
 
 /* ===================== word diff (CJK aware) ===================== */
+/* An inline code span is one token, so a change inside it replaces the whole span. A mark
+   that landed between the backticks would not be read as a mark at all: the parser blanks
+   marks out before it looks for code spans, so the backticks close around the blank, the
+   span protects what is inside it, and the mark survives into the document as literal text
+   — the edit is then lost on both sides at once. The same trap as a fenced block, one level
+   down, and it was reached by ordinary prose: `test/review.test.mjs` losing its directory. */
+function codeSpans(s){
+  var at = {}, m, RE = /`[^`\n]*`/g;     /* the span the parser protects, exactly */
+  while((m = RE.exec(s))) at[m.index] = m[0].length;
+  return at;
+}
 function tokenize(s){
-  var t = [], i = 0, n = s.length;
+  var t = [], i = 0, n = s.length, span = codeSpans(s);
   while(i < n){
+    if(span[i]){ t.push(s.slice(i, i + span[i])); i += span[i]; continue; }
     var c = s.charAt(i);
     if(/\s/.test(c)){ var j = i; while(j < n && /\s/.test(s.charAt(j))) j++; t.push(s.slice(i, j)); i = j; continue; }
     if(/[A-Za-z0-9]/.test(c)){ var k = i; while(k < n && /[A-Za-z0-9_'’-]/.test(s.charAt(k))) k++; t.push(s.slice(i, k)); i = k; continue; }
@@ -1212,18 +1224,38 @@ function alignBlocks(oldB, newB){
       i++;
     }
     /* inside one run, pair the blocks that are recognisably the same text rewritten */
-    var usedIns = {};
-    dels.forEach(function(d){
+    var usedIns = {}, pairs = [];
+    dels.forEach(function(d, di){
       var best = -1, score = PAIR_AT;
       inss.forEach(function(n, k){
         if(usedIns[k]) return;
         var sc = similarity(d.text, n.text);
         if(sc > score){ score = sc; best = k; }
       });
-      if(best >= 0){ usedIns[best] = 1; out.push({ t:'changed', a: d, b: inss[best] }); }
-      else out.push({ t:'removed', a: d });
+      if(best >= 0){ usedIns[best] = 1; pairs.push([di, best]); }
     });
-    inss.forEach(function(n, k){ if(!usedIns[k]) out.push({ t:'added', b: n }); });
+    /* Drop pairs that cross. Two blocks that swapped places are reported as a removal and
+       an addition instead: a crossed pair has no position that both versions agree on, and
+       the run is emitted in an order that has to read correctly against each of them. */
+    var ofDel = {}, ofIns = {}, lastK = -1;
+    pairs.forEach(function(p){
+      if(p[1] <= lastK) return;
+      lastK = p[1]; ofDel[p[0]] = p[1]; ofIns[p[1]] = p[0];
+    });
+    /* Merge the two sides rather than listing every deletion and then every addition. The
+       old order drew correctly but was not an order the newer version has, so a blackline
+       written from it accepted back to the right blocks in the wrong places. */
+    var di = 0, ki = 0;
+    while(di < dels.length || ki < inss.length){
+      if(di < dels.length && !(di in ofDel)){ out.push({ t:'removed', a: dels[di++] }); continue; }
+      if(ki < inss.length && !(ki in ofIns)){ out.push({ t:'added', b: inss[ki++] }); continue; }
+      if(di < dels.length && ki < inss.length && ofDel[di] === ki){
+        out.push({ t:'changed', a: dels[di++], b: inss[ki++] }); continue;
+      }
+      /* unreachable once the pairing is monotonic; here so a surprise cannot spin */
+      if(di < dels.length) out.push({ t:'removed', a: dels[di++] });
+      else out.push({ t:'added', b: inss[ki++] });
+    }
   }
   return out;
 }
@@ -1233,6 +1265,157 @@ function compareRows(){
   var older = docBlocks(compareWith.src);
   var newer = docBlocks(doc.src);
   return alignBlocks(older, newer);
+}
+
+/* ---------- blackline ----------
+   The comparison written out as a document: what both versions say, with every difference
+   standing in it as a suggestion. Reject them all and the older version is back; accept
+   them all and the newer one is. Word's legal blackline, except that the result is an
+   ordinary CriticMarkup file, so the next step is not reading a report — it is going
+   through the changes one at a time in the editor that is already open.
+
+   Blocks are laid out the way this tool writes any document: one blank line between them,
+   one newline at the end. So a blackline rejects back to the older version as the tool
+   would have saved it, not to a byte image of a file that may have had four blank lines in
+   a row. Whitespace between blocks is deliberately not a suggestion — marking it would put
+   a {~~\n\n~>\n~~} between every pair of paragraphs and bury the changes that matter. */
+var BL_SEP = '\n\n', BL_END = '\n';
+
+function blacklineSide(blocks){
+  return blocks.length ? blocks.map(function(b){ return b.text; }).join(BL_SEP) + BL_END : '';
+}
+
+/* Each boundary between blocks carries exactly one separator, and a block that is only in
+   one version has to carry its own — otherwise rejecting an inserted paragraph leaves the
+   blank line it came with, and two paragraphs that were never apart end up apart. So a
+   conditional block takes the separator on its left, inside its mark; the first block has
+   nothing on its left and takes the one on its right instead. That is the rule the editor
+   already follows when you add a block: {++\n\ntext++} in the middle, {++text\n\n++} at the
+   top. The end of the document is treated as one more boundary, which is what makes a file
+   whose last paragraph was deleted still end in a single newline. */
+/* A fenced block is not tracked, and must not be word-diffed: the marks that would leave
+   inside it are code as far as the parser is concerned, and it reads them back as text, so
+   the block never returns to either version. Struck whole and inserted whole it is fine —
+   the fence then sits inside the mark, where blanking the mark takes the fence with it. A
+   block that changed kind goes the same way: a paragraph rewritten into a list is a
+   restructuring, and a mark spanning the change would be read as part of the new shape. */
+function endsInFence(t){ return /(^|\n)[ \t]*(```|~~~)[^\n]*$/.test(t); }
+function blacklineWhole(a, b){
+  return a.kind === 'code' || b.kind === 'code' || a.kind !== b.kind;
+}
+function blacklineItems(rows){
+  var it = [];
+  rows.forEach(function(r){
+    if(r.t === 'added'){ it.push({ k:'add', text: r.b.text }); return; }
+    if(r.t === 'removed'){ it.push({ k:'del', text: r.a.text }); return; }
+    if(r.a.text !== r.b.text && blacklineWhole(r.a, r.b)){
+      it.push({ k:'del', text: r.a.text });
+      it.push({ k:'add', text: r.b.text });
+      return;
+    }
+    it.push({ k:'keep', a: r.a.text, b: r.b.text });
+  });
+  return it;
+}
+/* Does this piece of marked-up source say both versions? Asked of the real parser rather
+   than assumed, because the ways a mark can be swallowed are structural and not obvious
+   from the diff that produced it — a code span was one, and finding it by hand took a
+   comparison of two real files. Anything still swallowed falls back to replacing the block
+   whole, which is harder to read but always survives: blanking that one mark takes whatever
+   confused the parser out with it. */
+function blacklineHolds(src, a, b){
+  var saved = doc, held = false;
+  try{
+    doc = parse(src);
+    held = resolveRange(0, src.length, 'orig') === a &&
+           resolveRange(0, src.length, 'prop') === b;
+  }catch(e){ held = false; }
+  finally{ doc = saved; }
+  return held;
+}
+/* A block that quotes CriticMarkup cannot be put inside a mark: the parser pairs an opening
+   delimiter with the first closing one it meets, and that is the quoted one, so the mark is
+   cut short and the rest of the document goes with it. No arrangement of marks fixes it —
+   this is the format's one blind spot, and this project's own README walked into it. Such a
+   block is left at the older version and says so, which keeps rejecting honest; accepting
+   then does not reach the newer version for that block alone, and the count is reported
+   rather than left for the reader to notice. */
+var BL_UNTRACKED = 'changed, but could not be tracked: this block quotes CriticMarkup ' +
+                   'delimiters, and a mark cannot contain one';
+function blacklineBlock(a, b, stamp, notes){
+  if(a === b) return { src: a, tracked: true };
+  var src = opsToSource(diffTokens(tokenize(a), tokenize(b)), stamp);
+  if(blacklineHolds(src, a, b)) return { src: src, tracked: true };
+  var whole = '{~~' + a + '~>' + b + '~~}' + stamp;
+  if(blacklineHolds(whole, a, b)) return { src: whole, tracked: true };
+  return { src: notes ? blacklineNote(a, BL_UNTRACKED) : a, tracked: false };
+}
+/* The note is worth having only where it parses as one. Run onto the end of a fenced block
+   it lands on the line that closes the fence, which still closes it — so the note is inside
+   the fence, where it is code, and the block comes back carrying it as text. Where it will
+   not go, the count reported to the reader is the whole of the warning. */
+function blacklineNote(text, body){
+  var note = text + '{>>' + body + '<<}';
+  return blacklineHolds(note, text, text) ? note : text;
+}
+/* Builds the file and, as it goes, what each side of it is supposed to say — so the result
+   can be put to the parser as a whole rather than block by block. Block by block is not
+   enough: a note that parses perfectly on its own lands at the end of the line that closes a
+   fenced block, which still closes it, and is read as code. Safety depends on neighbours, so
+   the check has to see them. */
+function blacklineBuild(rows, stamp, notes){
+  var it = blacklineItems(rows), n = it.length, untracked = [];
+  if(!n) return { src: '', older: '', newer: '', untracked: untracked };
+  var taken = {};
+  it.forEach(function(x, i){
+    x.lead = ''; x.trail = '';
+    if(x.k === 'keep') return;
+    var j = i + 1, prev = i > 0 ? it[i-1] : null;
+    /* A mark that opens on the line closing a fenced block is inside the fence as far as the
+       parser is concerned — a closing line may carry trailing text — so it is read as code
+       and the block is lost. After a fence the separator goes on the right instead, which
+       starts the mark on a line of its own. */
+    if(prev && j < n && !taken[j] && endsInFence(prev.k === 'keep' ? prev.a : prev.text)){
+      taken[j] = 1; x.trail = BL_SEP; return;
+    }
+    if(i > 0 && !taken[i]){ taken[i] = 1; x.lead = BL_SEP; return; }
+    if(!taken[j]){ taken[j] = 1; x.trail = (j === n) ? BL_END : BL_SEP; }
+  });
+  var out = '', older = '', newer = '';
+  it.forEach(function(x, i){
+    if(i > 0 && !taken[i]){ out += BL_SEP; older += BL_SEP; newer += BL_SEP; }
+    if(x.k === 'add' || x.k === 'del'){
+      var whole = x.lead + x.text + x.trail;
+      var open = x.k === 'add' ? '{++' : '{--', shut = x.k === 'add' ? '++}' : '--}';
+      var one = open + whole + shut + stamp;
+      var was = x.k === 'add' ? '' : whole, will = x.k === 'add' ? whole : '';
+      if(blacklineHolds(one, was, will)){ out += one; older += was; newer += will; return; }
+      /* the blind spot, for a block that is in one version only: keep the older reading,
+         which for an addition means not writing the block at all */
+      untracked.push(x.k);
+      out += notes ? blacklineNote(was, (x.k === 'del' ? 'removed' : 'added') +
+                     ' in the other version, ' + BL_UNTRACKED.replace(/^changed, but /, ''))
+                   : was;
+      older += was; newer += was;
+      return;
+    }
+    var blk = blacklineBlock(x.a, x.b, stamp, notes);
+    if(!blk.tracked) untracked.push('keep');
+    out += blk.src; older += x.a; newer += blk.tracked ? x.b : x.a;
+  });
+  if(!taken[n]){ out += BL_END; older += BL_END; newer += BL_END; }
+  return { src: out, older: older, newer: newer, untracked: untracked };
+}
+/* One file, one question to the parser: does it still say both versions? If a note got in
+   the way, the notes go and the file is built again without them — the count reported to
+   the reader is then the whole of the warning. If even that does not hold, the caller is
+   told, because a blackline that reads back as neither version is worse than none. */
+function blacklineSource(rows, stamp){
+  var b = blacklineBuild(rows, stamp, true);
+  if(blacklineHolds(b.src, b.older, b.newer)) return { src: b.src, untracked: b.untracked, held: true };
+  b = blacklineBuild(rows, stamp, false);
+  return { src: b.src, untracked: b.untracked,
+           held: blacklineHolds(b.src, b.older, b.newer) };
 }
 
 /* ===================== state ===================== */
@@ -1500,6 +1683,9 @@ function renderCompare(){
         : '') +
     '</select>' +
     '<button type="button" class="cmpbrowse" data-act3="browse" title="Compare against a file anywhere on disk">Browse…</button>' +
+    (compareWith ? '<button type="button" class="cmpbrowse" data-act3="blackline" ' +
+      'title="Open this comparison as a document whose differences are suggestions to accept or reject">' +
+      'Open as suggestions</button>' : '') +
     '<span class="cmpstat" id="cmpstat"></span></div>';
 
   if(!compareWith){
@@ -2299,6 +2485,8 @@ document.getElementById('cmpfile').addEventListener('change', function(ev){
 nb.addEventListener('click', function(ev){
   var br = ev.target.closest('button[data-act3="browse"]');
   if(br){ browseCompare(); return; }
+  var bk = ev.target.closest('button[data-act3="blackline"]');
+  if(bk){ openBlackline(); return; }
   var fold = ev.target.closest('button[data-fold]');
   if(fold){
     var body = nb.querySelector('[data-foldbody="' + fold.dataset.fold + '"]');
@@ -2823,6 +3011,34 @@ function restoreFolders(){
       if(p === 'granted') return useFolder(top.handle, true);
     });
   }).catch(function(){});
+}
+/* The comparison as a document rather than a report. The Compare tab can only be read; this
+   turns what it found into suggestions, and then the next step is not reading a list of
+   differences but deciding on them one at a time, in the editor that is already open. It
+   arrives unsaved and attached to no file — a blackline is a third document, not a new
+   version of either side — so Save as… decides where it goes, and the two it came from are
+   untouched either way. */
+function openBlackline(){
+  if(!compareWith) return;
+  var rows = compareRows();
+  if(!rows) return;
+  var cur = docs[activeDoc], who = authorName();
+  var out = blacklineSource(rows, who ? '{>>@' + who + '<<}' : '');
+  if(!out.held){
+    toast('This comparison cannot be written as suggestions: a block in it quotes ' +
+          'CriticMarkup, and a mark cannot contain one. Nothing was opened.');
+    return;
+  }
+  var base = (cur ? cur.name : 'document.md').replace(/\.(md|markdown|mdown|txt)$/i, '');
+  var name = base + ' (blackline).md';
+  var older = compareWith.name;
+  compareWith = null;        /* it belongs to the document being left, not to this one */
+  openDoc(out.src, name, null, '', 'blackline:' + name);
+  setView('markup');
+  toast('Reject everything and you have ' + older + ' back; accept everything and you have ' +
+        base + '. Nothing is written until Save as…' +
+        (out.untracked.length ? ' — ' + out.untracked.length + ' block(s) could not be ' +
+         'tracked and are left as ' + older + ' says them' : ''));
 }
 function openDoc(text, name, handle, path, key){
   var raw = text.replace(/^\uFEFF/, '');

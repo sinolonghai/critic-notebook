@@ -387,6 +387,32 @@ The dropdown is a shortcut, holding the open documents and the files in the conn
 mailed you, a draft in another project. A browsed file is only the other side of the
 comparison — it is not opened for editing.
 
+**Open as suggestions** turns the comparison into a document. Every difference becomes a
+suggestion in it, so the next step is not reading a list of what changed but deciding on each
+one in the editor that is already open — Word calls the result a legal blackline. Reject
+everything and you have the older version; accept everything and you have the newer. It opens
+unsaved and attached to no file, because a blackline is a third document rather than a new
+version of either side; **Save as…** decides where it goes, and the two files it came from are
+untouched whatever you do to it.
+
+The claim is checked rather than asserted. The file is put to the page's own parser before it
+opens, and if it does not read back as both versions it is not opened at all — there is one
+shape it cannot take, below. `test/blackline.test.mjs` asserts the round trip on the cases that
+have broken; the two it was developed against were every consecutive version of this project's
+own README and CHANGELOG out of git history, 69 comparisons and about a thousand suggestions.
+
+A blackline is written in this tool's own layout: one blank line between blocks, one newline at
+the end. So rejecting everything gives the older version as this tool would have saved it, not
+a byte image of a file that may have had four blank lines in a row. Whitespace between blocks
+is deliberately not a suggestion — marking it would put one between every pair of paragraphs
+and bury the changes that matter.
+
+The shape it cannot take is a block that quotes CriticMarkup inside a code span, because the
+parser pairs an opening delimiter with the first closing one it meets and that would be the
+quoted one. Such a block is left at the older version with a note saying so, and the count is
+reported; where even that will not hold, nothing is opened and the tab says why. This project's
+own README is the document that found it.
+
 Two versions cannot be paired by position: insert one paragraph at the top and every later
 block shifts, so a positional diff reports the whole file as changed. Blocks are aligned first,
 by an LCS over their text, and only the pairs that survived alignment are diffed word by word.
@@ -524,12 +550,6 @@ starts over.
 
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
-
-**Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
-only draws them. Writing the result back out gives a third document whose differences *are*
-tracked suggestions — Word's "legal blackline" — which can then be accepted or rejected one at
-a time in the editor. The invariant comes along for free: reject-all is the older version,
-accept-all is the newer. Mostly reassembly, plus the newline rules whole-document output needs.
 
 **Take individual changes across versions.** The natural use of a blackline. It should produce
 a *new commit*, never a revert: prose is exactly the case where you accept one paragraph and

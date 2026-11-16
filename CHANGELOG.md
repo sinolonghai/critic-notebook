@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- **A comparison can be opened as suggestions** — Word's legal blackline, except that the
+  result is an ordinary CriticMarkup file, so the next step is not reading a list of
+  differences but deciding on them one at a time in the editor that is already open. Reject
+  everything and you have the older version; accept everything and you have the newer. It
+  opens unsaved and attached to no file, because a blackline is a third document rather than
+  a new version of either side. Blocks are laid out the way this tool writes any document —
+  one blank line between them — so rejecting gives the older version as the tool would have
+  saved it, not a byte image of a file with four blank lines in a row; whitespace between
+  blocks is deliberately not a suggestion, since marking it would put one between every pair
+  of paragraphs and bury the rest.
+- The file is put to the page's own parser before it opens, and does not open if it does not
+  read back as both versions. That check is not a formality: it found three separate ways a
+  mark can be swallowed, each of which would have written a file that read back as neither
+  version while looking perfectly correct.
+  - A mark inside an inline code span is not read as a mark at all — the parser blanks marks
+    out before it looks for code spans, so the backticks close around the blank and protect
+    what is left. A code span is now one token, so changing anything inside it replaces the
+    whole span. This was a live bug in the editor too, not only in comparisons: it was
+    reached by `test/review.test.mjs` losing a directory from its path.
+  - A mark that opens on the line closing a fenced block is inside the fence, because a
+    closing line may carry trailing text. A block added straight after a fence now takes its
+    blank line on the right instead, which starts the mark on a line of its own.
+  - A block that quotes CriticMarkup inside a code span cannot go inside a mark at all: the
+    parser pairs an opening delimiter with the first closing one it meets, and that is the
+    quoted one. There is no arrangement of marks that fixes it. Such a block is left at the
+    older version with a note saying so, the count is reported, and where even the note will
+    not parse — it lands on a fence's closing line — the notes are dropped and the count is
+    the whole of the warning.
+- Blocks in a run are merged rather than listed as every deletion and then every addition.
+  The old order drew correctly but was not an order the newer version has, so accepting
+  everything put the right blocks in the wrong places. A pair that crosses another is
+  reported as a removal and an addition instead, because two blocks that swapped have no
+  position both versions agree on.
+- `test/blackline.test.mjs` asserts the round trip on every case that has broken: additions
+  and removals at the top, the middle and the end, runs of both at once, lists, tables and
+  fences, documents that are entirely new or entirely gone, and the blind spot above. The
+  corpus it was developed against was every consecutive version of this project's own README
+  and CHANGELOG out of git history — 69 comparisons, about a thousand suggestions written,
+  four of which report a block they could not track.
+
 - A layout for a side panel. Below 880 pixels the top bar folds to two rows — name, jumps and
   the write buttons above, views and the signing name below — and the status line to one row
   that truncates from the right, so what survives is the part worth reading. The label on the
