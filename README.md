@@ -303,6 +303,68 @@ doing: following rule 1 means reproducing text verbatim, and models differ at it
 they differ at the editing itself. Results as they come in are in
 [docs/model-notes.md](docs/model-notes.md).
 
+## In a panel beside an assistant
+
+The shape this is headed for: you ask an assistant to edit a file, it marks the changes, the
+marked file opens in a panel, you take and drop them one at a time, save, and tell the
+assistant to commit the result or send it on.
+
+A page in a panel cannot be handed a path — `showOpenFilePicker` needs a human gesture and
+will not take a string — so the host hands over the text instead and takes it back the same
+way. Four messages, no credentials, nothing touching a filesystem:
+
+```text
+page → host   { type: 'ready', protocol: 1, version: '0.2.0' }
+host → page   { type: 'open',  name: 'A.md', text: '…' }
+page → host   { type: 'save',  name: 'A.md', text: '…' }
+page → host   { type: 'dirty', dirty: true, open: 3 }
+```
+
+A host in twenty lines:
+
+```html
+<iframe id="f" src="critic-notebook.html"></iframe>
+<script>
+  const page = document.getElementById('f').contentWindow;
+  addEventListener('message', ev => {
+    if (ev.source !== page) return;
+    switch (ev.data.type) {
+      case 'ready':                               // the page has loaded and is listening
+        page.postMessage({ type: 'open', name: 'A.md', text: myMarkdown }, '*');
+        break;
+      case 'save':                                // the reviewer pressed Save
+        writeItSomewhere(ev.data.name, ev.data.text);
+        break;
+      case 'dirty':                               // decisions are pending; do not close yet
+        panelHasUnsavedWork = ev.data.dirty;
+        break;
+    }
+  });
+</script>
+```
+
+`ready` is broadcast, because the host's origin is not known yet and the message says nothing
+about any document. Everything after it is sent to the origin the first `open` arrived from
+and nowhere else: a document must not be posted to a parent that never asked for one. The
+page ignores any message that did not come from its own parent.
+
+`dirty` is not decoration. The `beforeunload` guard that protects unsaved review work does not
+fire reliably for an iframe a host tears down, so the page has to be able to say it is holding
+decisions that would be lost. `dirty` is about unsaved edits; `open` counts suggestions nobody
+has decided on yet, which can be above zero on a document that is perfectly saved.
+
+While hosted, the page hides **Open folder**, **Open file**, **Save as** and the documents
+pane. Those are not merely useless when the host owns the file — opening another one would
+leave Save handing the host back something it never asked for. **Save** posts the document
+instead of writing it, and the document counts as saved from that moment: a host that asks
+for a document is taken to be committing to do something with it.
+
+Not there yet: a `saved` acknowledgement, so the page could report a host that dropped the
+document rather than assuming it landed; and `ask` / `suggest`, which would let you select a
+paragraph, send it to the assistant for a rewrite, and have the result arrive in that block —
+removing the copy and the paste that are otherwise the one manual step in the loop. The layout
+is also still the wide one; see [To do](#to-do).
+
 ## Comparing two versions
 
 The **Compare** tab diffs the open document against another one — a different file, or an
@@ -451,42 +513,10 @@ starts over.
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
 
-**Take the document in and out through whatever opened the page.** The use this tool is headed
-for is a panel beside an assistant: you ask it to edit a file, it marks the changes, the marked
-file opens here, you take and drop them one at a time, save, and tell the assistant to commit
-the result or send it on. Everything in that sentence works today except the opening and the
-saving, and those do not work for a reason no amount of layout fixes: **a browser page cannot
-be handed a path.** `showOpenFilePicker` needs a human gesture and will not take a string, so
-in a panel the file picker is not inconvenient, it is the wrong mechanism.
-
-What fits is a small message protocol, perhaps thirty lines, carrying no credentials and
-touching no filesystem:
-
-```text
-host → page   { type: 'open', name: 'A.md', text: '…' }
-page → host   { type: 'save', text: '…' }
-              { type: 'dirty', changes: 3 }
-```
-
-The third message is not decoration. The guard that protects unsaved review work is a
-`beforeunload` handler, and that does not fire reliably for an iframe the host tears down — so
-a host that closes the panel would take a half-finished review with it. The page has to be able
-to say it is holding decisions.
-
-There is already a foothold: the page detects `window.self !== window.top` and turns off the
-File System Access API, the directory picker and the download path when embedded, so Save
-degrades to **Copy** — which is exactly the slot where *hand the text back to the host*
-belongs. Keep the surface generic, since no host has a convention for this yet, and keep the
-standalone file a first-class citizen, because that is what works today with nobody's
-cooperation.
-
-Later, and only once the first three messages are real: `{ type: 'ask', blockId, text }` with
-`{ type: 'suggest', blockId, text }` coming back would remove the copy and the paste from
-"rewrite this paragraph for me", which is otherwise the one step in the loop that is still
-manual.
-
-**A narrow mode, for living in that panel.** The panes are the easy half — both already
-collapse into drawers at 1180 and 880 pixels, and what is wrong at 420 is the defaults. The
+**A narrow mode, for living in that panel.** The handing over is built — see *In a panel
+beside an assistant* — and what is left is the layout. The panes are the easy half: both
+already collapse into drawers at 1180 and 880 pixels, and what is wrong at 420 is the
+defaults. The
 work is the top bar, which holds pane toggles, the path, four view tabs, the signing name,
 Undo, Open folder, Open file, Save as and Save, and will not fit in a side panel at any font
 size.

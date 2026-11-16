@@ -113,6 +113,10 @@ button,input,textarea{font:inherit;color:inherit}
 .app:not(.side-open){--wside:0px}
 .app:not(.out-open){--wout:0px}
 .app:not(.side-open) .side{display:none}
+/* hosted: the file came from the host and goes back to it, so nothing here opens or
+   redirects one */
+.app.hosted #btn-open,.app.hosted #btn-openfile,.app.hosted #btn-saveas,
+.app.hosted #tog-side{display:none}
 .app:not(.out-open) .outline{display:none}
 
 .pane{overflow-y:auto;overscroll-behavior:contain;background:var(--surface);min-width:0;display:flex;flex-direction:column}
@@ -1583,6 +1587,7 @@ function paintSaveState(){
   b.disabled = !canSave();
   b.title = (r && r.scratch) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
     : !canSave() ? 'No changes to save'
+    : inHost() ? 'Hand the document back (' + MOD + 'S)'
     : CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Download the .md (' + MOD + 'S)' : 'Copy the markdown (' + MOD + 'S)';
 }
 function paintStart(){
@@ -1604,6 +1609,7 @@ function paintStatus(){
   document.getElementById('btn-all-no').disabled = !open || view === 'compare';
   document.getElementById('dirty').hidden = !isDirty();
   paintSaveState();
+  notifyHost();
 }
 function paintLit(){
   nb.querySelectorAll('.lit').forEach(function(e){ e.classList.remove('lit'); });
@@ -2830,6 +2836,78 @@ var CAN_DIR = topLevel && typeof window.showDirectoryPicker === 'function';
    used to name localhost explicitly, which left a Firefox or Safari visitor to a hosted copy
    with Copy as the only way to get their edits out. */
 var CAN_DL = topLevel && (location.protocol === 'file:' || window.isSecureContext);
+/* ===================== talking to whatever opened this page =====================
+ *
+ * A page in a side panel cannot be handed a path: showOpenFilePicker needs a human gesture
+ * and will not take a string, so in that setting the file picker is not inconvenient, it is
+ * the wrong mechanism. The host hands over the text instead and takes it back the same way.
+ * Four messages, no credentials, nothing touching a filesystem:
+ *
+ *   page → host   { type:'ready', protocol:1, version:'…' }   on load
+ *   host → page   { type:'open',  name:'A.md', text:'…' }
+ *   page → host   { type:'save',  name:'A.md', text:'…' }
+ *   page → host   { type:'dirty', dirty:true, open:3 }
+ *
+ * 'ready' is broadcast, because the host's origin is not known yet and the message says
+ * nothing about any document. Everything after it goes to the origin the first 'open' came
+ * from and nowhere else: a document must not be posted to a parent that never asked for one.
+ *
+ * 'dirty' is not decoration. The beforeunload guard that protects unsaved review work does
+ * not fire reliably for an iframe a host tears down, so the page has to be able to say it is
+ * holding decisions that would be lost.
+ */
+var hostOrigin = null;
+function inHost(){ return hostOrigin !== null; }
+function hostLabel(){
+  if(!inHost()) return 'the host';
+  try{ return new URL(hostOrigin).hostname || 'the host'; }catch(e){ return 'the host'; }
+}
+function postHost(msg){
+  if(!inHost()) return;
+  /* An opaque origin — a host that is itself a local file — arrives as the string "null",
+     which is not a legal targetOrigin and throws. There is nothing to pin to in that case,
+     and the message goes to window.parent either way: the origin only decides which parent
+     is allowed to receive it, and a local host has no origin to name. */
+  var target = (hostOrigin === 'null' || !hostOrigin) ? '*' : hostOrigin;
+  try{ window.parent.postMessage(msg, target); }catch(e){}
+}
+var lastSaid = null;
+function notifyHost(){
+  if(!inHost()) return;
+  var dirty = canSave(), open = openCount(), said = dirty + '/' + open;
+  if(said === lastSaid) return;   /* render runs constantly; speak only when it changes */
+  lastSaid = said;
+  postHost({ type: 'dirty', dirty: dirty, open: open });
+}
+if(!topLevel){
+  window.addEventListener('message', function(ev){
+    if(ev.source !== window.parent) return;
+    var m = ev.data;
+    if(!m || typeof m !== 'object' || m.type !== 'open' || typeof m.text !== 'string') return;
+    if(inHost() && ev.origin !== hostOrigin) return;
+    var first = !inHost();
+    hostOrigin = ev.origin;
+    if(first) enterHostMode();
+    var name = (typeof m.name === 'string' && m.name) ? m.name : 'document.md';
+    /* a second 'open' on a document with unsaved decisions asks before replacing it */
+    guardDirty(function(){
+      openDoc(m.text, name, null, '', 'host:' + name);
+      lastSaid = null;
+      notifyHost();
+    });
+  });
+  try{ window.parent.postMessage({ type: 'ready', protocol: 1, version: VERSION }, '*'); }catch(e){}
+}
+/* The host owns the file, so the controls that would open or redirect one are not merely
+   useless here, they are wrong: opening another file would leave Save sending the host back
+   something it never asked for. */
+function enterHostMode(){
+  app.classList.add('hosted');
+  app.classList.remove('side-open');
+  document.getElementById('tog-side').setAttribute('aria-pressed', 'false');
+  document.getElementById('btn-save').textContent = 'Save';  /* paintSaveState sets the title */
+}
+
 var SAVE_LABEL = CAN_FS ? 'Save' : CAN_DL ? 'Download' : 'Copy';
 document.getElementById('btn-save').textContent = SAVE_LABEL;
 document.getElementById('btn-save').title =
@@ -2856,7 +2934,7 @@ function suggestName(){
 }
 var MD_TYPES = [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.mdown'], 'text/plain': ['.txt'] } }];
 
-function afterSave(name, written){
+function afterSave(name, written, note){
   savedSrc = doc.src;
   if(written !== undefined) diskText = normDisk(written);
   syncRecord();
@@ -2865,7 +2943,7 @@ function afterSave(name, written){
     if(f.key === r.key){ f.count = (doc.src.match(MARK_RE_COUNT) || []).length; f.scanned = true; }
   });
   paintStatus(); paintDocList();
-  toast('Saved to ' + name);
+  toast(note || ('Saved to ' + name));
 }
 function writeHandle(text){
   return fileHandle.createWritable()
@@ -2914,6 +2992,15 @@ function askStale(onDisk, text){
 function saveFile(){
   flushEditor();
   var text = exportText();
+  if(inHost()){
+    /* The host owns the file; the page only ever held the text. It is handed back and the
+       document counts as saved from here, because the page has done the whole of its part —
+       a host that asks for a document is committing to do something with it. */
+    var nm = (docs[activeDoc] && docs[activeDoc].name) || 'document.md';
+    postHost({ type: 'save', name: nm, text: text });
+    afterSave(nm, text, 'Sent back to ' + hostLabel());
+    return Promise.resolve(true);
+  }
   if(CAN_FS && fileHandle){
     return staleOnDisk().then(function(onDisk){
       return onDisk === null ? writeHandle(text) : askStale(onDisk, text);

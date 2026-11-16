@@ -249,7 +249,7 @@ if (comments) {
 }
 
 /* 5. legal but hard to review */
-if (per1k > 12) {
+if (per1k > 12 && original.text.length >= 800) {   /* per-1,000 says nothing about 200 characters */
   warn(`${per1k.toFixed(0)} marks per 1,000 characters is a lot to decide one at a time. Past some ` +
        `density a\n      reader stops deciding and starts accepting, and whatever is wrong rides ` +
        `through with\n      what is right — so check this one before trusting it, especially any ` +

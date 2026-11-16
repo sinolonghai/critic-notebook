@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- The page can be handed a document by whatever opened it, and hand it back. Four messages —
+  `ready`, `open`, `save`, `dirty` — carrying no credentials and touching no filesystem,
+  because a page in a panel cannot be given a path: `showOpenFilePicker` needs a gesture and
+  will not take a string, so there the file picker is not inconvenient, it is the wrong
+  mechanism. `ready` is broadcast and says nothing about any document; everything after goes
+  only to the origin the first `open` came from. `dirty` exists because the `beforeunload`
+  guard does not fire reliably for an iframe a host tears down, so the page must be able to
+  say it is holding decisions. While hosted the page hides the controls that would open or
+  redirect a file — those are not useless but wrong, since opening another would leave Save
+  returning something the host never asked for.
+- Closing the documents pane no longer collapses the document. The panes were placed in the
+  shell's grid by source order, so hiding one shifted the rest a column left: above 1,180
+  pixels the outline took the document's column, and below that everything went to nothing.
+  Shipped broken since the three-pane layout, and found only because a hosted page closes
+  that pane deliberately — every browser test so far had left the panes as they load.
+- The judge stops reporting density for documents under 800 characters, where marks per
+  thousand says more about the arithmetic than about the document.
 - A mark that changes a figure is told apart from one that changes a word. The inline mark
   gets a dashed amber outline, its row a **figure** tag, the status bar a count, and
   **Accept all** stops being one click: it says how many suggestions it is about to write,
