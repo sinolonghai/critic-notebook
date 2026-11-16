@@ -314,7 +314,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.3.1' }
+page → host   { type: 'ready', protocol: 1, version: '0.4.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -363,6 +363,35 @@ Not there yet: a `saved` acknowledgement, so the page could report a host that d
 document rather than assuming it landed; and `ask` / `suggest`, which would let you select a
 paragraph, send it to the assistant for a rewrite, and have the result arrive in that block —
 removing the copy and the paste that are otherwise the one manual step in the loop.
+
+### From the command line
+
+`tools/panel.mjs` is the protocol's second host, and the first meant for daily use. It is how
+you tell an assistant that can run commands to put a file in front of you:
+
+```sh
+node tools/panel.mjs notes.md          # review it; saving writes the file
+node tools/panel.mjs notes.md --once   # stop after the first save
+```
+
+It serves the page on localhost, hands it the file, and writes back what you decide — the loop
+closes without anything being copied by hand. Say this to an assistant and it has what it
+needs:
+
+> 改完 `notes.md` 之后跑 `node tools/panel.mjs notes.md`，我在浏览器里审。
+
+It serves rather than writing a page into a temp folder for two reasons: a page on localhost is
+a trusted origin, so the editor behaves as it does from a folder, and saving has somewhere to
+go. The server binds to 127.0.0.1, every request must carry a token made at startup — any other
+page in your browser can reach a localhost port, and the token is what stops one writing to
+your file — and it lives only as long as you are reviewing. The path is fixed when the process
+starts, and nothing the page says can change it.
+
+What it needs is a shell on **your** machine and a checkout of this repository. An assistant
+whose code runs in its own cloud sandbox — ChatGPT's included — cannot open your browser or
+reach your files, so there you are the one who runs the command, and the assistant's part is
+only to write the marked-up file. An assistant that works in your filesystem — Claude Code,
+WorkBuddy, Copilot in an editor — can run it for you.
 
 Below 880 pixels the top bar folds to two rows and loses what a panel has no use for: the
 label on the signing name, the "5 to review" count that the status line below repeats, and —

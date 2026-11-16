@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.0 — 2026-11-16
+
+- `tools/panel.mjs <file>` opens a file for review in a browser and writes back what you
+  decide. It is the host protocol's second host and the first meant for daily use, and it is
+  the answer to a question the protocol left open: how an assistant that can run commands puts
+  a particular file in front of you. `node tools/panel.mjs notes.md` is the whole of what you
+  have to tell it.
+- It serves the page on localhost rather than writing one into a temp folder, which is what
+  closes the loop. A page served from localhost is a trusted origin, so the editor behaves as
+  it does from a folder; and saving has somewhere to go, so what comes out of a review is the
+  file on disk rather than a textarea to copy out of by hand. Any other page in the browser can
+  reach a localhost port, so every request carries a token made at startup, the server binds to
+  127.0.0.1 only, the path is fixed when the process starts — nothing the page says can change
+  it — and the whole thing lives only as long as you are reviewing.
+- The host warns before a close that would lose decisions. The page's own guard cannot fire for
+  a frame its host tears down, which is the reason it reports `dirty` at all; this is the first
+  host to use it for what it is for.
+
 ## 0.3.1 — 2026-11-16
 
 Three things the first hour with a blackline found. All of them are about a document that is
