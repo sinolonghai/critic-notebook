@@ -20,6 +20,13 @@
   end counts as being at its last suggestion — the last block of a short document cannot reach
   the top of the viewport, so the counter would otherwise stick partway and **next** would
   look broken.
+- A pane that closed because the window was narrow opens again when it is not. The two panes
+  were sized once at load and never reconsidered, so widening a side panel back out to a full
+  window left both of them shut, with nothing to suggest that the two small buttons in the
+  corner were what brought them back. Only the toggle writes a preference, so an absent one
+  means the width decided and may decide again; a pane you closed yourself is never reopened
+  over your head, and in a hosted panel the document list stays gone at any width, because
+  there the host owns the file and the toggle is hidden.
 - The `+ new block` buttons between paragraphs stay visible on touch screens rather than on
   narrow ones. Narrow is not the same as touch: a side panel on a desktop has a mouse, and had
   a dashed button hanging between every pair of paragraphs.

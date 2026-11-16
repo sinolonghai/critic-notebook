@@ -3349,17 +3349,43 @@ function toast(msg){
 /* ===================== boot ===================== */
 document.querySelectorAll('[data-mod]').forEach(function(k){ k.textContent = MOD + k.dataset.mod; });
 
+function paneFits(which){
+  /* the width at which the pane still has a column of its own; below it, it is a drawer */
+  return window.innerWidth >= (which === 'side' ? 880 : 1180);
+}
+function panePref(which){
+  try{ return localStorage.getItem('cm-pane-' + which); }catch(e){ return null; }
+}
+function setPane(which, on){
+  app.classList.toggle(which === 'side' ? 'side-open' : 'out-open', on);
+  document.getElementById(which === 'side' ? 'tog-side' : 'tog-out')
+    .setAttribute('aria-pressed', String(on));
+}
 (function initPanes(){
-  var wide = window.innerWidth >= 1180, mid = window.innerWidth >= 880;
-  function want(key, dflt){
-    try{ var v = localStorage.getItem('cm-pane-' + key); return v === null ? dflt : v === '1'; }
-    catch(e){ return dflt; }
-  }
-  var side = want('side', mid), out = want('out', wide);
-  app.classList.toggle('side-open', side);
-  app.classList.toggle('out-open', out);
-  document.getElementById('tog-side').setAttribute('aria-pressed', String(side));
-  document.getElementById('tog-out').setAttribute('aria-pressed', String(out));
+  ['side', 'out'].forEach(function(which){
+    var p = panePref(which);
+    setPane(which, p === null ? paneFits(which) : p === '1');
+  });
+})();
+/* A pane that closed because the window was too narrow opens again when it is not. Only
+   the toggle writes a preference, so an absent one means the width decided and may decide
+   again; a pane you closed yourself is never reopened over your head. Resizing into a side
+   panel and back out again otherwise left both panes shut with no hint that the buttons in
+   the corner were what brought them back. */
+(function followWidth(){
+  var t = null;
+  window.addEventListener('resize', function(){
+    clearTimeout(t);
+    t = setTimeout(function(){
+      ['side', 'out'].forEach(function(which){
+        if(panePref(which) !== null) return;
+        if(which === 'side' && inHost()) return;   /* the host owns the file; no document list */
+        var cls = which === 'side' ? 'side-open' : 'out-open', want = paneFits(which);
+        if(app.classList.contains(cls) !== want) setPane(which, want);
+      });
+      requestAnimationFrame(syncOutline);
+    }, 150);
+  });
 })();
 
 docs.push({ key: 'sample', name: 'tutorial.md', path: '', label: 'tutorial.md', scratch: true,
