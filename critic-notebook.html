@@ -100,7 +100,16 @@ button,input,textarea{font:inherit;color:inherit}
 .status .mini button:disabled:hover{border-color:var(--rule-strong);color:inherit}
 
 /* ---------- three panes ---------- */
-.shell{flex:1 1 auto;display:grid;grid-template-columns:var(--wside) minmax(0,1fr) var(--wout);min-height:0}
+/* Named areas, not auto-placement. A hidden pane leaves the grid, and auto-placement then
+   shifts every pane after it one column to the left — which put the outline where the
+   document should be and collapsed the document to nothing the moment the documents pane
+   was closed. Naming the areas makes where a pane sits independent of how many siblings
+   it happens to have. */
+.shell{flex:1 1 auto;display:grid;grid-template-columns:var(--wside) minmax(0,1fr) var(--wout);
+  grid-template-areas:"side center out";min-height:0}
+.side{grid-area:side}
+.center{grid-area:center}
+.outline{grid-area:out}
 .app:not(.side-open){--wside:0px}
 .app:not(.out-open){--wout:0px}
 .app:not(.side-open) .side{display:none}
@@ -431,13 +440,13 @@ button,input,textarea{font:inherit;color:inherit}
 
 /* ---------- narrow: panes become drawers ---------- */
 @media (max-width:1180px){
-  .shell{grid-template-columns:var(--wside) minmax(0,1fr)}
+  .shell{grid-template-columns:var(--wside) minmax(0,1fr);grid-template-areas:"side center"}
   .app.out-open .outline{position:fixed;top:0;right:0;bottom:0;width:260px;z-index:30;box-shadow:var(--pop-shadow)}
   .app:not(.out-open){--wout:0px}
   .app.out-open{--wout:0px}
 }
 @media (max-width:880px){
-  .shell{grid-template-columns:minmax(0,1fr)}
+  .shell{grid-template-columns:minmax(0,1fr);grid-template-areas:"center"}
   .app.side-open .side{position:fixed;top:0;left:0;bottom:0;width:260px;z-index:30;box-shadow:var(--pop-shadow)}
   .app.side-open{--wside:0px}
   .cell{grid-template-columns:24px minmax(0,1fr)}
