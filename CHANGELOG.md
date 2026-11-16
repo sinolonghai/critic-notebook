@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-16
+
+Two versions of a document, and the changes between them taken one at a time. The release
+also moves the tool into a panel beside an assistant, which is where the last one decided it
+belonged.
+
+- **A blackline can become the new version of the file it was made against.** The strip above
+  it offers **Make it the new &lt;file&gt;**: the document is handed that file's identity, and
+  from then on it *is* that file — same handle, same row, ⌘S writes it. Reject the suggestions
+  you want to put back, accept the rest, save, and what comes out is a new version rather than
+  a revert to an older one, which is the whole difference. Prose is exactly the case where you
+  keep one paragraph and return the next. The row the file was already open under is dropped
+  on adoption, because two rows claiming one file is how a save quietly throws the other away;
+  **Keep it separate** declines and leaves a third document for **Save as…**. Suggestions
+  still open in the newer document are read as accepted, and the count is said out loud.
 
 - **A comparison can be opened as suggestions** — Word's legal blackline, except that the
   result is an ordinary CriticMarkup file, so the next step is not reading a list of
@@ -97,6 +111,12 @@
   formally correct CriticMarkup — nothing but reading caught them, and nobody reads a
   hundred marks carefully. Deleting a number and inserting one both count, since both
   change what the document asserts; rewriting `$206` as `206 dollars` does not.
+
+**Still not 1.0.** The file format has been stable since 0.1.0 and the invariant now holds
+across whole documents rather than single blocks, which is the part that was missing. What
+is still young is everything around it: the panel protocol has one host, written to test it,
+and the three ways a mark can be swallowed were all found in one afternoon by pointing the
+tool at this project's own history. A fourth is a reasonable thing to expect.
 
 ## 0.2.0 — 2026-11-13
 

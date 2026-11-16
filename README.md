@@ -314,7 +314,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.2.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.3.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -391,9 +391,18 @@ comparison — it is not opened for editing.
 suggestion in it, so the next step is not reading a list of what changed but deciding on each
 one in the editor that is already open — Word calls the result a legal blackline. Reject
 everything and you have the older version; accept everything and you have the newer. It opens
-unsaved and attached to no file, because a blackline is a third document rather than a new
-version of either side; **Save as…** decides where it goes, and the two files it came from are
-untouched whatever you do to it.
+unsaved and attached to no file — nothing should be written to a file on the strength of a
+button that drew a comparison — and a strip above it offers the thing that makes it worth more
+than a report: **Make it the new &lt;file&gt;**, which hands it the identity of the document it
+was made against, so from then on it *is* that file and ⌘S writes it.
+
+That is how you take individual changes across versions. Reject the suggestions you want to put
+back, accept the rest, save: what comes out is a new version of the file, never a revert to an
+older one. Prose is exactly the case where you keep one paragraph and return the next, so "go
+back to version N" is the wrong shape for the problem. The row the file was already open under
+is dropped when the blackline adopts it, because two rows claiming one file is how a save
+quietly throws the other away. **Keep it separate** declines all of that and leaves a plain
+third document for **Save as…**; either way the older side is never written to.
 
 The claim is checked rather than asserted. The file is put to the page's own parser before it
 opens, and if it does not read back as both versions it is not opened at all — there is one
@@ -550,10 +559,6 @@ starts over.
 
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
-
-**Take individual changes across versions.** The natural use of a blackline. It should produce
-a *new commit*, never a revert: prose is exactly the case where you accept one paragraph and
-reject the next, so "go back to version N" is the wrong shape for the problem.
 
 **Combine two reviewers' copies.** Reviewing *in turn* already works: each person signs with a
 name, their suggestions and comments carry it in the file, and whoever opens it next can take,

@@ -577,6 +577,11 @@ button,input,textarea{font:inherit;color:inherit}
         <button type="button" id="start-folder">Open folder</button>
         <button type="button" id="start-file">Open file</button>
       </div>
+      <div class="start" id="bl" hidden>
+        <span class="lbl" id="bl-txt"></span>
+        <button type="button" id="bl-adopt"></button>
+        <button type="button" id="bl-keep">Keep it separate</button>
+      </div>
       <div class="nb" id="nb"></div>
     </main>
 
@@ -600,7 +605,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.2.0';
+var VERSION = '0.3.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1835,6 +1840,17 @@ function paintSaveState(){
 function paintStart(){
   var r = docs[activeDoc];
   document.getElementById('start').hidden = !(r && r.scratch && view === 'markup');
+  /* A blackline arrives detached, because nothing should be written to a file on the strength
+     of a button that only drew a comparison. The strip is where it is told what it is and
+     offered the one thing that makes it worth more than a report: becoming the next version
+     of the file it was made against. */
+  var bl = r && r.from, strip = document.getElementById('bl');
+  strip.hidden = !(bl && view === 'markup');
+  if(!bl) return;
+  document.getElementById('bl-txt').innerHTML =
+    '<b>This is a blackline</b> of ' + esc(r.from.older) + ' → ' + esc(r.from.name) +
+    '. Rejecting a suggestion takes that block back to ' + esc(r.from.older) + '.';
+  document.getElementById('bl-adopt').textContent = 'Make it the new ' + r.from.name;
 }
 function paintStatus(){
   var open = openCount();
@@ -3033,12 +3049,37 @@ function openBlackline(){
   var name = base + ' (blackline).md';
   var older = compareWith.name;
   compareWith = null;        /* it belongs to the document being left, not to this one */
+  var pending = openCount();      /* counted on the newer document, before it is left */
+  var from = cur && { key: cur.key, name: cur.name, path: cur.path, handle: cur.handle,
+                      eol: cur.eol, diskText: cur.diskText, older: older };
   openDoc(out.src, name, null, '', 'blackline:' + name);
+  if(from) docs[activeDoc].from = from;
   setView('markup');
+  render();
   toast('Reject everything and you have ' + older + ' back; accept everything and you have ' +
-        base + '. Nothing is written until Save as…' +
-        (out.untracked.length ? ' — ' + out.untracked.length + ' block(s) could not be ' +
-         'tracked and are left as ' + older + ' says them' : ''));
+        base + '. Nothing is written yet.' +
+        (out.untracked.length ? ' ' + out.untracked.length + ' block(s) could not be ' +
+         'tracked and are left as ' + older + ' says them.' : '') +
+        (pending ? ' ' + pending + ' suggestion' + (pending === 1 ? '' : 's') + ' open in ' +
+         base + ' ' + (pending === 1 ? 'was' : 'were') + ' read as accepted.' : ''));
+}
+/* The blackline becomes the document it was made against: same file, same handle, same
+   record. This is the point of the whole thing — prose is exactly the case where you keep
+   one paragraph and put the next one back, so what should come out is a new version of the
+   file, never a revert to an older one. The record it came from is dropped, because two rows
+   claiming one file is how a save silently throws the other away. */
+function adoptOrigin(){
+  var r = docs[activeDoc];
+  if(!r || !r.from) return Promise.resolve(false);
+  var f = r.from;
+  r.from = null;
+  r.key = f.key; r.name = f.name; r.label = f.name; r.path = f.path;
+  r.handle = f.handle || null; r.eol = f.eol; r.diskText = f.diskText;
+  fileHandle = r.handle; diskText = r.diskText === undefined ? null : r.diskText;
+  dropDuplicate();
+  if(r.path){ expandTo(r.path); saveExpanded(); }
+  paintTitle(); render();
+  return saveFile();
 }
 function openDoc(text, name, handle, path, key){
   var raw = text.replace(/^\uFEFF/, '');
@@ -3442,6 +3483,13 @@ document.getElementById('start-file').addEventListener('click', function(){
   document.getElementById('btn-openfile').click();
 });
 document.getElementById('start-folder').hidden = !CAN_DIR;
+document.getElementById('bl-adopt').addEventListener('click', function(){ adoptOrigin(); });
+document.getElementById('bl-keep').addEventListener('click', function(){
+  var r = docs[activeDoc];
+  if(r) r.from = null;
+  paintStart();
+  toast('Kept separate — Save as… writes it wherever you want it');
+});
 document.getElementById('btn-save').addEventListener('click', function(){ saveFile(); });
 var saveAsBtn = document.getElementById('btn-saveas');
 saveAsBtn.hidden = !CAN_FS;
