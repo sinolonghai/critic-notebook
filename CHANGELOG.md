@@ -2,10 +2,17 @@
 
 ## Unreleased
 
-- A layout for a side panel. Below 700 pixels the top bar folds to two rows and the status
-  line to one that truncates from the right, so what survives is the part worth reading; the
-  tutorial strip goes, the label on the signing name goes, and hosted, where there is one
-  reviewer, the name goes with it. Into the bar goes `←  3 / 7  →`, which steps between blocks
+- A layout for a side panel. Below 880 pixels the top bar folds to two rows — name, jumps and
+  the write buttons above, views and the signing name below — and the status line to one row
+  that truncates from the right, so what survives is the part worth reading. The label on the
+  signing name goes, the "5 to review" count beside the file name goes because the status line
+  below repeats it, and hosted, where there is one reviewer, the name goes with it. Below 700
+  the tutorial strip goes too, which is where the two buttons it offers are also the two left
+  in the bar. 880 is the width at which both panes have already given up their columns to
+  become drawers: the layout has admitted there is no room beside the document, and the bar was
+  the last thing still pretending otherwise. An assistant's side panel is around 780 wide,
+  which a first attempt at this put on the wide side of the line and left wrapping into four
+  rows. Into the bar goes `←  3 / 7  →`, which steps between blocks
   carrying suggestions and says where you are. Those jumps were in the outline pane, which a
   narrow layout is the first thing to throw away, and they are what the panel is for: the
   document becomes a queue of decisions rather than a page to scroll. Hosted at 420 pixels

@@ -364,14 +364,18 @@ document rather than assuming it landed; and `ask` / `suggest`, which would let 
 paragraph, send it to the assistant for a rewrite, and have the result arrive in that block —
 removing the copy and the paste that are otherwise the one manual step in the loop.
 
-Below 700 pixels the top bar folds to two rows and loses what a panel has no use for: the
-tutorial strip, the label on the signing name, and — hosted — the name itself, since there is
-one reviewer. What goes *in* is `←  3 / 7  →` beside the file name, which jumps between blocks
+Below 880 pixels the top bar folds to two rows and loses what a panel has no use for: the
+label on the signing name, the "5 to review" count that the status line below repeats, and —
+hosted — the signing name itself, since there is one reviewer. 880 is where both panes have
+already given up their columns and become drawers; the bar was the last thing still pretending
+there was room beside the document. What goes *in* is `←  3 / 7  →` beside the file name,
+which jumps between blocks
 carrying suggestions. Those buttons lived in the outline pane, the first thing a narrow layout
 throws away, and they are the most useful control in the interface for this job: they turn the
 document into a review queue, which for "it changed four things, decide on each" is better than
-the wide layout rather than a degradation of it. Hosted at 420 pixels there are 124 pixels above
-the first line of the document, where there were 199.
+the wide layout rather than a degradation of it. Hosted at 780 pixels — a panel beside a chat —
+there are 142 pixels above the first line of the document, where there were 189; at 420, 124
+where there were 199.
 
 ## Comparing two versions
 

@@ -84,7 +84,7 @@ button,input,textarea{font:inherit;color:inherit}
 .tools{display:flex;gap:6px;flex-wrap:wrap}
 .navjump{display:none;align-items:center;gap:2px;flex:0 0 auto}
 .navjump[hidden]{display:none}
-@media (max-width:700px){ .navjump:not([hidden]){display:flex} }
+@media (max-width:880px){ .navjump:not([hidden]){display:flex} }
 .navjump button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:6px;
   width:30px;height:26px;padding:0;cursor:pointer;font-size:13px;line-height:1;color:var(--ink-soft)}
 .navjump button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
@@ -475,34 +475,42 @@ button,input,textarea{font:inherit;color:inherit}
    Nothing overflows at 420 pixels — the bar wraps instead, into four rows, and with the
    status line and the lead text that is half the panel gone before the document starts.
    So: the bar folds to two rows, the view switcher shares the second with the signing
-   name, the lead goes, and the control a reviewer actually uses all day — next change,
-   previous change — comes up out of the outline pane, which at this width is a drawer
-   nobody has open. */
-@media (max-width:700px){
+   name, and the control a reviewer actually uses all day — next change, previous change —
+   comes up out of the outline pane, which at this width is a drawer nobody has open.
+
+   The line is 880, where both panes have already given up their columns and become
+   drawers: the layout has admitted at that point that there is no room beside the
+   document, and the bar is the last thing still pretending otherwise. An assistant's side
+   panel is around 780 wide, which the first attempt at this put on the wide side of the
+   line and left wrapping into four rows. */
+@media (max-width:880px){
   .bar{gap:7px;padding:7px 10px;padding-top:calc(7px + env(safe-area-inset-top,0px))}
   .pane-tog{order:1}
-  .brand{order:2;flex:1 1 60px}
+  .brand{order:2;flex:1 1 120px}     /* enough basis to hold a file name, not three letters */
+  .brand .meta{display:none}         /* "5 to review" — the status line below says it again */
   .tools{order:4}
   .seg{order:5;flex:1 1 auto}
-  .whoami{order:4;flex:0 1 auto;min-width:0}
+  .whoami{order:6;flex:0 1 auto;min-width:0}   /* second row, beside the view switcher */
   .whoami label{display:none}        /* the input already says "your name" */
   .whoami input{width:6.5rem}
   .navjump{order:3}   /* before the tools: this is the control used all day */
-  #lead{display:none}
   .status{padding:5px 10px;gap:8px;flex-wrap:nowrap}
   .status .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .status .mini{flex:0 0 auto}
-  .nb,.lead{padding-left:12px;padding-right:12px}
 }
 /* the panel case: the host owns the file, so the view switcher gets the room those
    buttons were using */
-@media (max-width:700px){
+@media (max-width:880px){
   .app.hosted .whoami{display:none}
 }
-
-@media (max-width:620px){
-  .brand .meta{display:none}
+/* The lead holds the two buttons a first-time reader is told to press, so it survives a
+   narrow window and goes only when the window is too small to spend fifty pixels on it —
+   by which point the same two buttons are the ones left in the bar. */
+@media (max-width:700px){
+  #lead{display:none}
+  .nb,.lead{padding-left:12px;padding-right:12px}
 }
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
