@@ -362,8 +362,16 @@ for a document is taken to be committing to do something with it.
 Not there yet: a `saved` acknowledgement, so the page could report a host that dropped the
 document rather than assuming it landed; and `ask` / `suggest`, which would let you select a
 paragraph, send it to the assistant for a rewrite, and have the result arrive in that block —
-removing the copy and the paste that are otherwise the one manual step in the loop. The layout
-is also still the wide one; see [To do](#to-do).
+removing the copy and the paste that are otherwise the one manual step in the loop.
+
+Below 700 pixels the top bar folds to two rows and loses what a panel has no use for: the
+tutorial strip, the label on the signing name, and — hosted — the name itself, since there is
+one reviewer. What goes *in* is `←  3 / 7  →` beside the file name, which jumps between blocks
+carrying suggestions. Those buttons lived in the outline pane, the first thing a narrow layout
+throws away, and they are the most useful control in the interface for this job: they turn the
+document into a review queue, which for "it changed four things, decide on each" is better than
+the wide layout rather than a degradation of it. Hosted at 420 pixels there are 124 pixels above
+the first line of the document, where there were 199.
 
 ## Comparing two versions
 
@@ -512,25 +520,6 @@ starts over.
 
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
-
-**A narrow mode, for living in that panel.** The handing over is built — see *In a panel
-beside an assistant* — and what is left is the layout. The panes are the easy half: both
-already collapse into drawers at 1180 and 880 pixels, and what is wrong at 420 is the
-defaults. The
-work is the top bar, which holds pane toggles, the path, four view tabs, the signing name,
-Undo, Open folder, Open file, Save as and Save, and will not fit in a side panel at any font
-size.
-
-The two changes converge, which is the good news: an embedded page needs no Open folder, no
-Open file, no Save as and no signing name — the host supplies the file and there is one
-reviewer — and those are exactly the controls with nowhere to go. So narrow mode is mostly
-subtraction, and settling the protocol first tells you what to subtract.
-
-What should go *in* instead: the outline's jump-to-next-change buttons, which are the most
-useful control in the whole interface for this job and are currently buried in a pane that a
-narrow layout would throw away. `← →  3 / 7` in the bar turns a cramped panel into a review
-queue, which for "the assistant changed four things, decide on each" may be better than the
-wide layout rather than a degradation of it.
 
 **Save a comparison as a file.** The Compare tab works out the alignment and the word diff but
 only draws them. Writing the result back out gives a third document whose differences *are*

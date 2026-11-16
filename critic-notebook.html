@@ -82,6 +82,15 @@ button,input,textarea{font:inherit;color:inherit}
 .whoami{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-faint);white-space:nowrap}
 .whoami input{width:84px;padding:4px 7px;border:1px solid var(--rule-strong);border-radius:6px;background:var(--paper);font-size:12.5px}
 .tools{display:flex;gap:6px;flex-wrap:wrap}
+.navjump{display:none;align-items:center;gap:2px;flex:0 0 auto}
+.navjump[hidden]{display:none}
+@media (max-width:700px){ .navjump:not([hidden]){display:flex} }
+.navjump button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:6px;
+  width:30px;height:26px;padding:0;cursor:pointer;font-size:13px;line-height:1;color:var(--ink-soft)}
+.navjump button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.navjump button:disabled{opacity:.4;cursor:default}
+.navjump .at{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);
+  min-width:2.6rem;text-align:center;font-variant-numeric:tabular-nums}
 .btn{border:1px solid var(--rule-strong);background:var(--surface);padding:5px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
 .btn:disabled{opacity:.42;cursor:default}
@@ -455,8 +464,42 @@ button,input,textarea{font:inherit;color:inherit}
   .app.side-open{--wside:0px}
   .cell{grid-template-columns:24px minmax(0,1fr)}
   .out{font-size:16px}
+}
+/* A pointer that cannot hover never reveals the insert button, so it stays out. Width was
+   standing in for this and got it wrong in a side panel, where there is a mouse and every
+   gap between blocks carried a dashed button nobody was reaching for. */
+@media (hover:none){
   .gap button{opacity:1}
 }
+/* ---------- narrow: a side panel, where vertical space is the scarce thing ----------
+   Nothing overflows at 420 pixels — the bar wraps instead, into four rows, and with the
+   status line and the lead text that is half the panel gone before the document starts.
+   So: the bar folds to two rows, the view switcher shares the second with the signing
+   name, the lead goes, and the control a reviewer actually uses all day — next change,
+   previous change — comes up out of the outline pane, which at this width is a drawer
+   nobody has open. */
+@media (max-width:700px){
+  .bar{gap:7px;padding:7px 10px;padding-top:calc(7px + env(safe-area-inset-top,0px))}
+  .pane-tog{order:1}
+  .brand{order:2;flex:1 1 60px}
+  .tools{order:4}
+  .seg{order:5;flex:1 1 auto}
+  .whoami{order:4;flex:0 1 auto;min-width:0}
+  .whoami label{display:none}        /* the input already says "your name" */
+  .whoami input{width:6.5rem}
+  .navjump{order:3}   /* before the tools: this is the control used all day */
+  #lead{display:none}
+  .status{padding:5px 10px;gap:8px;flex-wrap:nowrap}
+  .status .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .status .mini{flex:0 0 auto}
+  .nb,.lead{padding-left:12px;padding-right:12px}
+}
+/* the panel case: the host owns the file, so the view switcher gets the room those
+   buttons were using */
+@media (max-width:700px){
+  .app.hosted .whoami{display:none}
+}
+
 @media (max-width:620px){
   .brand .meta{display:none}
 }
@@ -493,6 +536,11 @@ button,input,textarea{font:inherit;color:inherit}
       <button type="button" class="btn" id="btn-openfile">Open file</button>
       <button type="button" class="btn" id="btn-saveas" hidden>Save as…</button>
       <button type="button" class="btn primary" id="btn-save">Save</button>
+    </div>
+    <div class="navjump" id="navjump">
+      <button type="button" id="nav-prev" title="Previous block with suggestions" aria-label="Previous change">←</button>
+      <span class="at" id="nav-at">0/0</span>
+      <button type="button" id="nav-next" title="Next block with suggestions" aria-label="Next change">→</button>
     </div>
   </div>
 
@@ -1599,8 +1647,11 @@ function paintStatus(){
   var label = view === 'original' ? 'original' : view === 'final' ? 'final' : 'current';
   var body = resolveRange(0, doc.src.length, view === 'original' ? 'orig' : 'prop');
   document.getElementById('stxt').textContent =
-    doc.cells.length + ' blocks · ' + open + ' open suggestion' + (open === 1 ? '' : 's') +
-    (figureCount() ? ' (' + figureCount() + ' changing a figure)' : '') +
+    /* suggestions first: at a panel's width this line is truncated, and what survives
+       should be the part a reviewer is working from */
+    open + ' open suggestion' + (open === 1 ? '' : 's') +
+    (figureCount() ? ' (' + figureCount() + ' changing a figure)' : '') + ' · ' +
+    doc.cells.length + ' blocks' +
     ' · ' + wordCount(body) + ' words ' + label;
   paintStart();
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
@@ -1675,6 +1726,7 @@ function syncOutline(){
   syncPending = true;
   requestAnimationFrame(function(){
     syncPending = false;
+    paintJump();
     var rows = document.querySelectorAll('.out-row[data-goto]');
     if(!rows.length) return;
     var mark = center.scrollTop + 90, best = null;
@@ -1693,6 +1745,30 @@ function scrollToCell(idx, flash){
     el.classList.add('open');
     setTimeout(function(){ el.classList.remove('open'); }, 900);
   }
+}
+/* Where the reader is in the run of blocks that carry suggestions. The same walk
+   jumpSuggestion does, reported rather than acted on, so the two cannot disagree. */
+function suggestionPos(){
+  var list = [];
+  doc.cells.forEach(function(c, i){ if(cellMarks(c).length) list.push(i); });
+  if(!list.length) return { at: 0, total: 0 };
+  /* A document shorter than two screens cannot scroll its last block to the top, so the
+     position would stick partway and pressing "next" would look broken. At the end of the
+     document you are, by any reading, at the last suggestion. */
+  if(center.scrollTop + center.clientHeight >= center.scrollHeight - 4)
+    return { at: list.length, total: list.length };
+  var here = center.scrollTop + 80, cur = 0;
+  list.forEach(function(i, n){
+    var el = nb.querySelector('.cell[data-idx="' + i + '"]');
+    if(el && el.offsetTop <= here) cur = n + 1;
+  });
+  return { at: cur, total: list.length };
+}
+function paintJump(){
+  var p = suggestionPos(), n = document.getElementById('nav-at');
+  if(n) n.textContent = p.at + '/' + p.total;
+  var a = document.getElementById('nav-prev'), b = document.getElementById('nav-next');
+  if(a) a.disabled = b.disabled = !p.total;
 }
 function jumpSuggestion(dir){
   var list = [];
@@ -2560,6 +2636,8 @@ document.getElementById('outlist').addEventListener('click', function(ev){
 });
 document.getElementById('jump-next').addEventListener('click', function(){ jumpSuggestion(1); });
 document.getElementById('jump-prev').addEventListener('click', function(){ jumpSuggestion(-1); });
+document.getElementById('nav-next').addEventListener('click', function(){ jumpSuggestion(1); });
+document.getElementById('nav-prev').addEventListener('click', function(){ jumpSuggestion(-1); });
 
 /* Accept all writes every suggestion into the file in one go, which is fine for a document a
    colleague marked up and wrong for one an assistant produced in bulk — and bulk is exactly

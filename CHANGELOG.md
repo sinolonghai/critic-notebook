@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- A layout for a side panel. Below 700 pixels the top bar folds to two rows and the status
+  line to one that truncates from the right, so what survives is the part worth reading; the
+  tutorial strip goes, the label on the signing name goes, and hosted, where there is one
+  reviewer, the name goes with it. Into the bar goes `←  3 / 7  →`, which steps between blocks
+  carrying suggestions and says where you are. Those jumps were in the outline pane, which a
+  narrow layout is the first thing to throw away, and they are what the panel is for: the
+  document becomes a queue of decisions rather than a page to scroll. Hosted at 420 pixels
+  there are 124 pixels above the first line, where there were 199. A document scrolled to the
+  end counts as being at its last suggestion — the last block of a short document cannot reach
+  the top of the viewport, so the counter would otherwise stick partway and **next** would
+  look broken.
+- The `+ new block` buttons between paragraphs stay visible on touch screens rather than on
+  narrow ones. Narrow is not the same as touch: a side panel on a desktop has a mouse, and had
+  a dashed button hanging between every pair of paragraphs.
 - The page can be handed a document by whatever opened it, and hand it back. Four messages —
   `ready`, `open`, `save`, `dirty` — carrying no credentials and touching no filesystem,
   because a page in a panel cannot be given a path: `showOpenFilePicker` needs a gesture and
