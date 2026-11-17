@@ -224,10 +224,17 @@ button,input,textarea{font:inherit;color:inherit}
   cursor:pointer;white-space:nowrap}
 .start button:hover{background:var(--accent-soft)}
 
-.gap{height:16px;position:relative;display:flex;align-items:center;justify-content:center;gap:6px}
-.gap button{opacity:0;transition:opacity .12s;border:1px dashed var(--rule-strong);background:var(--paper);
-  color:var(--ink-faint);border-radius:999px;font-size:11px;line-height:1;padding:3px 13px;cursor:pointer;font-family:var(--mono)}
-.gap:hover button,.gap button:focus-visible{opacity:1}
+/* These stay on screen. They were drawn only on hover, which kept the margin quiet and
+   meant nobody found them: a control between two paragraphs is exactly the one you have to
+   know is there before you would think to look. Small, faint and paired instead — + makes a
+   paragraph here, − takes the break out between these two — so the pair explains itself. */
+.gap{height:18px;position:relative;display:flex;align-items:center;justify-content:center;gap:5px}
+.gap button{opacity:.34;transition:opacity .12s,color .12s,border-color .12s;border:1px solid var(--rule-strong);
+  background:var(--paper);color:var(--ink-faint);border-radius:999px;font-size:11px;line-height:1;
+  width:17px;height:17px;padding:0;cursor:pointer;font-family:var(--mono);display:flex;
+  align-items:center;justify-content:center}
+.gap:hover button{opacity:.8}
+.gap button:hover,.gap button:focus-visible{opacity:1;color:var(--ink);border-color:var(--ink-faint)}
 .gap::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--rule);opacity:0;transition:opacity .12s}
 .gap:hover::before{opacity:1}
 
@@ -476,8 +483,9 @@ button,input,textarea{font:inherit;color:inherit}
 /* A pointer that cannot hover never reveals the insert button, so it stays out. Width was
    standing in for this and got it wrong in a side panel, where there is a mouse and every
    gap between blocks carried a dashed button nobody was reaching for. */
+/* no hover to reveal anything with, so they sit at full strength */
 @media (hover:none){
-  .gap button{opacity:1}
+  .gap button{opacity:.75}
 }
 /* ---------- narrow: a side panel, where vertical space is the scarce thing ----------
    Nothing overflows at 420 pixels — the bar wraps instead, into four rows, and with the
@@ -613,7 +621,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.6.0';
+var VERSION = '0.6.1';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1659,9 +1667,14 @@ function joinable(k){
   if(k <= 0 || k >= cells.length) return null;
   var A = cells[k-1], B = cells[k];
   if(A.kind !== 'para' || B.kind !== 'para') return null;
+  /* Only the whitespace at the end of the gap has to be plain, not the whole of it: a comment
+     left on the end of a paragraph sits in the gap too, and refusing to join under one would
+     rule out most of a document that has already been reviewed. The mark goes around the
+     break itself and nothing else. */
   var gap = doc.src.slice(A.b, B.a);
-  if(!/^[\n \t]+$/.test(gap) || (gap.match(/\n/g) || []).length < 2) return null;
-  return { a: A.b, b: B.a, gap: gap };
+  var run = /[\n \t]+$/.exec(gap);
+  if(!run || (run[0].match(/\n/g) || []).length < 2) return null;
+  return { a: A.b + run.index, b: B.a, gap: run[0] };
 }
 function joinBlocks(k){
   var j = joinable(k);
@@ -1676,8 +1689,9 @@ function joinBlocks(k){
 function gapHtml(k){
   if(insertAt === k) return editorHtml('new', k);
   return '<div class="gap" data-gap="' + k + '">' +
-    (joinable(k) ? '<button type="button" data-join="' + k + '" title="Join these two paragraphs into one">\u2934 join</button>' : '') +
-    '<button type="button" data-ins="' + k + '" title="Insert a new block here">+ new block</button></div>';
+    '<button type="button" data-ins="' + k + '" title="Insert a new paragraph here" aria-label="Insert a paragraph">+</button>' +
+    (joinable(k) ? '<button type="button" data-join="' + k + '" title="Join these two paragraphs into one"' +
+      ' aria-label="Join these two paragraphs">\u2212</button>' : '') + '</div>';
 }
 
 function editorHtml(kind, idx){

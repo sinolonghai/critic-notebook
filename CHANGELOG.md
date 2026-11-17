@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.1 — 2026-11-17
+
+Both halves of why nobody found **join** the first time it existed.
+
+- The controls between paragraphs stay on screen: a small **+** in every gap, and a **−**
+  beside it where the two paragraphs can be joined. They were drawn only on hover, which kept
+  the margin quiet at the cost of the one thing that matters for a control sitting between two
+  paragraphs — you have to know it is there before you would think to look for it. Faint until
+  the gap is hovered, so a long document does not turn into a column of buttons, and paired, so
+  the two explain each other: **+** makes a paragraph here, **−** takes the break out between
+  these two.
+- Join is offered under a comment. It asked for the whole gap between two paragraphs to be
+  plain text, and a comment left on the end of a paragraph sits in that gap — which ruled it
+  out across most of a document that had actually been reviewed, which is every document this
+  is for. Only the whitespace at the end of the gap has to be plain now, since that is all the
+  mark goes around.
+
 ## 0.6.0 — 2026-11-16
 
 The three edits a reviewer makes by hand that still meant retyping a paragraph.
