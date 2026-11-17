@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-16
+
+The three edits a reviewer makes by hand that still meant retyping a paragraph.
 
 - **Delete** joins Copy, Edit and Comment on the selection popover: it strikes the selected
   words where they stand, as an ordinary tracked deletion. Dropping two words from a sentence
@@ -10,6 +12,26 @@
   so accepting leaves one space rather than two and rejecting puts the words back exactly.
   Offered wherever the offsets reach plain text, which is everywhere a comment can go, plus
   across a line break, since a newline inside a deletion is how a whole block is removed.
+
+- **Join** sits in the gap between two paragraphs, where **+ new block** already was, and
+  proposes making them one. Joining is deleting the break between them, and the break is two
+  newlines: one stays outside the mark, because text outside a mark is the original and
+  rejecting has to give both paragraphs back, and the other goes inside. What is left between
+  them is a single newline, which is a soft wrap, which is one paragraph.
+
+      first paragraph.\n{--\n--}second paragraph.
+
+  That the mark holds one newline rather than a blank line is also what makes the join show at
+  once: a mark whose text contains a blank line is given a block of its own, and this one is
+  not — so the two paragraphs are drawn as the single paragraph they propose to become, with
+  the struck break still in it. Offered only between two plain paragraphs with nothing but
+  whitespace between them; anything else in that gap is a mark, and a mark inside a mark does
+  not survive the parser.
+- Splitting a paragraph already worked — type a blank line into a block and commit — but it
+  drew as an all-but-empty **Replace** row with two coloured dashes above it, which told the
+  reader nothing. A mark whose two sides hold only whitespace is not a wording change at all;
+  it is the structure moving. Those are now called **Split** and **Join**, say what they do in
+  the row, and draw as a pilcrow, struck or inserted, where the break is.
 
 ## 0.5.0 — 2026-11-16
 

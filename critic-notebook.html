@@ -224,7 +224,7 @@ button,input,textarea{font:inherit;color:inherit}
   cursor:pointer;white-space:nowrap}
 .start button:hover{background:var(--accent-soft)}
 
-.gap{height:16px;position:relative;display:flex;align-items:center;justify-content:center}
+.gap{height:16px;position:relative;display:flex;align-items:center;justify-content:center;gap:6px}
 .gap button{opacity:0;transition:opacity .12s;border:1px dashed var(--rule-strong);background:var(--paper);
   color:var(--ink-faint);border-radius:999px;font-size:11px;line-height:1;padding:3px 13px;cursor:pointer;font-family:var(--mono)}
 .gap:hover button,.gap button:focus-visible{opacity:1}
@@ -613,7 +613,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.5.0';
+var VERSION = '0.6.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -901,7 +901,9 @@ function blockMark(ids){
   if(view === 'original') return head.t === 'ins' ? '' : renderPlain(head.t === 'hil' ? head.body : head.rem);
   if(view === 'final')    return head.t === 'del' ? '' : renderPlain(head.t === 'hil' ? head.body : head.add);
   var html = '';
-  if(head.t === 'del') html = '<div class="blk del"' + tag + '>' + renderPlain(head.rem) + '</div>';
+  var stb = structureLabel(head);
+  if(stb) html = '<div class="blk ' + (stb === 'Join' ? 'del' : 'ins') + ' pilcrow"' + tag + '>\u00b6</div>';
+  else if(head.t === 'del') html = '<div class="blk del"' + tag + '>' + renderPlain(head.rem) + '</div>';
   else if(head.t === 'ins') html = '<div class="blk ins"' + tag + '>' + renderPlain(head.add) + '</div>';
   else html = '<div class="blk del"' + tag + '>' + renderPlain(head.rem) + '</div>' +
               '<div class="blk ins"' + tag + '>' + renderPlain(head.add) + '</div>';
@@ -1512,6 +1514,22 @@ function subHtml(mk, fig, box){
   if(fine) return box('fine' + fig, fine);
   return box('del' + fig, flat(mk.rem)) + box('ins' + fig, flat(mk.add));
 }
+/* A mark whose two sides hold nothing but whitespace is not a wording change at all: it is
+   the structure moving. Drawn as itself it is an empty box and a row reading "Replace \u2192"
+   with nothing on either side of the arrow, which tells the reader nothing. It gets a name
+   and a pilcrow instead, so a split and a join look like what they are. */
+function structureLabel(mk){
+  if(mk.t !== 'del' && mk.t !== 'ins' && mk.t !== 'sub') return null;
+  var rem = mk.rem || '', add = mk.add || '';
+  if(/\S/.test(rem) || /\S/.test(add)) return null;
+  var breakRem = /\n/.test(rem), breakAdd = /\n/.test(add);
+  if(mk.t === 'del') return breakRem ? 'Join' : null;
+  if(mk.t === 'ins') return breakAdd ? 'Split' : null;
+  var blankRem = /\n[ \t]*\n/.test(rem), blankAdd = /\n[ \t]*\n/.test(add);
+  if(blankAdd && !blankRem) return 'Split';
+  if(blankRem && !blankAdd) return 'Join';
+  return null;
+}
 function markHtml(mk){
   if(!mk) return '';
   var tag = ' data-mi="' + localOf(mk) + '"';
@@ -1528,6 +1546,8 @@ function markHtml(mk){
     return flat(mk.body);
   }
   var fig = changesFigure(mk) ? ' num' : '';
+  var st = structureLabel(mk);
+  if(st) return box(st === 'Join' ? 'del pilcrow' : 'ins pilcrow', '\u00b6');
   if(mk.t === 'ins') return box('ins' + fig, flat(mk.add));
   if(mk.t === 'del') return box('del' + fig, flat(mk.rem));
   if(mk.t === 'sub') return subHtml(mk, fig, box);
@@ -1539,8 +1559,12 @@ function markRow(mk, mi){
   var single = (mk.t === 'com' || mk.t === 'hil');
   var e = function(s){ return esc(s).replace(/\n/g, ' '); };
   var editing = noteEdit && noteEdit.cell === curCell && noteEdit.mi === mi;
+  var st = structureLabel(mk);
   var txt;
-  if(mk.t === 'ins') txt = '<span class="now">' + e(mk.add) + '</span>';
+  if(st) txt = '<span class="quote">' + (st === 'Split'
+      ? 'the paragraph is broken here'
+      : 'the break between these paragraphs is removed') + '</span>';
+  else if(mk.t === 'ins') txt = '<span class="now">' + e(mk.add) + '</span>';
   else if(mk.t === 'del') txt = '<span class="was">' + e(mk.rem) + '</span>';
   else if(mk.t === 'sub'){
     /* the same second diff the inline mark gets: a row reading as two long clauses with an
@@ -1577,7 +1601,7 @@ function markRow(mk, mi){
     ? '<span class="figflag" title="This changes a figure, not a wording — check it against the source">figure</span>'
     : '';
   return '<div class="mk' + (editing ? ' editing' : '') + '" data-k="' + mk.t + '" data-mi="' + mi + '">' +
-    '<span class="chip">' + LABEL[mk.t] + '</span>' + figflag + '<span class="txt">' + txt + '</span>' +
+    '<span class="chip">' + (st || LABEL[mk.t]) + '</span>' + figflag + '<span class="txt">' + txt + '</span>' +
     (ops ? '<span class="ops">' + ops + '</span>' : '') + '</div>';
 }
 
@@ -1615,10 +1639,45 @@ function commitNoteEdit(){
   toast('Comment updated');
 }
 
+/* Joining two paragraphs is deleting the break between them, and the break is two newlines.
+   One stays outside the mark, because text outside a mark is the original and rejecting has
+   to give the two paragraphs back; the other goes inside. What is left — one newline between
+   them — is a soft wrap, which is one paragraph.
+
+     first paragraph.\n{--\n--}second paragraph.
+
+   That the mark holds a single newline rather than a blank line is what makes the join show
+   up at once: a mark whose text contains a blank line is given a block of its own, and this
+   one is not, so the two paragraphs are drawn as the single paragraph they are proposing to
+   become, with the struck break still in it. Splitting, which you do by typing a blank line
+   into a block, shows the same way round — the proposed structure, with the change marked.
+
+   Only two plain paragraphs with nothing but whitespace between them. Anything else in that
+   gap is a mark, and a mark inside a mark does not survive the parser. */
+function joinable(k){
+  var cells = doc.cells;
+  if(k <= 0 || k >= cells.length) return null;
+  var A = cells[k-1], B = cells[k];
+  if(A.kind !== 'para' || B.kind !== 'para') return null;
+  var gap = doc.src.slice(A.b, B.a);
+  if(!/^[\n \t]+$/.test(gap) || (gap.match(/\n/g) || []).length < 2) return null;
+  return { a: A.b, b: B.a, gap: gap };
+}
+function joinBlocks(k){
+  var j = joinable(k);
+  if(!j) return;
+  var who = authorName();
+  editSource(j.a, j.b, j.gap.charAt(0) + '{--' + j.gap.slice(1) + '--}' + (who ? '{>>@' + who + '<<}' : ''));
+  maybeSignHint();
+  toast('Joined \u2014 \u2715 on the row puts the break back');
+}
+
 /* ===================== rows ===================== */
 function gapHtml(k){
   if(insertAt === k) return editorHtml('new', k);
-  return '<div class="gap" data-gap="' + k + '"><button type="button" data-ins="' + k + '" title="Insert a new block here">+ new block</button></div>';
+  return '<div class="gap" data-gap="' + k + '">' +
+    (joinable(k) ? '<button type="button" data-join="' + k + '" title="Join these two paragraphs into one">\u2934 join</button>' : '') +
+    '<button type="button" data-ins="' + k + '" title="Insert a new block here">+ new block</button></div>';
 }
 
 function editorHtml(kind, idx){
@@ -2579,6 +2638,9 @@ nb.addEventListener('click', function(ev){
   }
   var fl = ev.target.closest('button[data-flag]');
   if(fl){ showMarkedUp(+fl.dataset.flag); return; }
+
+  var jn = ev.target.closest('button[data-join]');
+  if(jn){ flushEditor(); joinBlocks(+jn.dataset.join); return; }
 
   var ins = ev.target.closest('button[data-ins]');
   if(ins){ openInsert(+ins.dataset.ins); return; }
