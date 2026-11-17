@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.0 — 2026-11-17
+
+- **Merge reviews…** in the Compare tab: two people who reviewed the same document apart from
+  each other, both sets of suggestions in one file with each attributed. Word calls it
+  *Combine*. Both files reject to one original — that is what makes them mergeable, and the
+  first thing it checks — so every suggestion can be placed by where it stands in that
+  original rather than by where it sits in the file it arrived in.
+- The names are asked for at the moment they can be known. An assistant signs where it leaves
+  a comment and nowhere else, so half of what it changed comes back anonymous; but at the
+  moment of merging you know which file came from whom, which is better evidence than a model
+  remembering to sign. Anything already signed keeps its name, everything else is stamped with
+  the name for its side, and the names offered are taken from the marks already in each file.
+- Where both touched the same words, the first is kept and the second is written beside it as
+  a comment saying what it would have done. CriticMarkup cannot nest, so two suggestions
+  cannot cover one span; nothing is lost and nothing is invented, which is the same answer the
+  blackline gives for a block it cannot mark. The count is reported when the result opens.
+- Rejecting every suggestion gives back the document both reviews started from. That is put to
+  the page's own parser before the result opens, and if it fails the result does not open.
+  Accepting everything is deliberately not a claim: it would mean taking two people's
+  suggestions at once, which is a document neither of them wrote. Two files that do not reject
+  to the same text are refused with the reason.
+- `test/merge.test.mjs` asserts it on ten cases — reviews that miss each other, a mark that
+  already says who made it, the same phrase twice, one suggestion inside another's deletion,
+  comments which consume nothing and so never conflict, two insertions at one point, an
+  untouched copy, two files from different originals, a real document reviewed twice, and
+  quoted text that would otherwise close the comment it is quoted in. A `merge` scenario joins
+  the browser suite for the part that happens in the interface.
+
 ## 0.8.1 — 2026-11-17
 
 Two things wrong with telling one reviewer from another, found by putting two of them in one

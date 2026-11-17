@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.8.1** · [changelog](CHANGELOG.md)
+**0.9.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -128,6 +128,7 @@ Only needed if you are changing the tool. Node 18 or newer, no packages to insta
 node test/review.test.mjs      # unit: the cases that have broken before
 node test/documents.test.mjs   # whole documents end to end
 node test/blackline.test.mjs   # a comparison written out, and read back as both versions
+node test/merge.test.mjs       # two reviews laid over one original
 node test/browser.test.mjs     # the interface, in a real browser — needs Playwright
 ```
 
@@ -193,6 +194,7 @@ that block.
 | Jump between touched blocks | `↑ prev` / `next ↓` in the outline |
 | Fold a side pane | the two buttons at the top left |
 | Compare two versions | the **Compare** tab |
+| Merge two reviews | the **Compare** tab, then **Merge reviews…** |
 
 Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author
 gets a colour.
@@ -323,7 +325,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.8.1' }
+page → host   { type: 'ready', protocol: 1, version: '0.9.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -484,6 +486,29 @@ the left like any other folder. Git stays in git's hands: a web page has no busi
 packfiles, and a reader that handled only loose objects would work on a fresh repo and quietly
 stop after the first `git gc`.
 
+**Merge reviews…** is the other thing two files can be to each other. Where a blackline is one
+version against a later one, a merge is two people who reviewed the *same* document apart from
+each other: both files reject to one original, and that original is what the two sets of
+suggestions are laid over. Word calls it *Combine*.
+
+The names are asked for at that moment because that is when they can be known. An assistant
+signs where it leaves a comment and nowhere else, so half of what it changed comes back
+anonymous — but you know which file came from whom, which is better evidence than a model
+remembering to sign. Anything already signed keeps its name; everything else is stamped with
+the name for its side. Each reviewer then has a colour, and the right edge of the suggestion
+rows is a column you can run an eye down.
+
+Where both touched the same words there is nothing to be done: CriticMarkup cannot nest, so
+two suggestions cannot cover one span. The first is kept and the second is written beside it as
+a comment saying what it would have done — nothing lost, nothing invented, the same answer the
+blackline gives for a block it cannot mark. The count is reported when the merge opens.
+
+The one claim asserted is that rejecting every suggestion gives back the document both reviews
+started from; it is put to the page's own parser before the result opens, and if it fails the
+result does not open. Accepting everything is deliberately *not* a claim: it would mean taking
+two people's suggestions at once, which is a document neither of them wrote. Two files that do
+not reject to the same text are refused with the reason.
+
 Taking individual changes from one version into another is what **Open as suggestions** above
 is for, and it lands in a new commit rather than a revert — prose is exactly the case where you
 keep one paragraph and put the next one back.
@@ -635,14 +660,6 @@ starts over.
 
 Roughly in the order they would be worth doing. Each note says what makes it hard, because
 that is the part that gets forgotten.
-
-**Combine two reviewers' copies.** Reviewing *in turn* already works: each person signs with a
-name, their suggestions and comments carry it in the file, and whoever opens it next can take,
-drop or reply to what the last one left. Missing is Word's *Combine* — two people who edited the
-same original **in parallel**, both sets of changes merged into one document with each
-attributed. Needs a common ancestor — `git merge-base` where there is a repo, and asking
-otherwise — and a way to show a genuine conflict, which CriticMarkup has no syntax for. Worth
-designing only once two people are actually editing the same file.
 
 **Read git directly.** It would remove `tools/history.mjs`, since the page already holds a
 handle on the repository and browsers now decompress zlib natively. Loose objects are easy;

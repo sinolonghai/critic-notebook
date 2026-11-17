@@ -61,7 +61,8 @@ function instrumented(){
   const at = src.lastIndexOf('})();');
   if(at < 0) throw new Error('could not find the page script IIFE close');
   const hook = `window.__T={
-    openDoc:openDoc, setView:setView, render:render,
+    openDoc:openDoc, setView:setView, render:render, parse:parse, resolveRange:resolveRange,
+    get d(){ return doc; }, set d(v){ doc = v; },
     setCompare:function(c){ compareWith = c; render(); },
     useFiles:function(l){ files = l; folder = { handle:{name:'f'}, name:'f', abs:'/f' }; paintDocList(); },
     docs:function(){ return docs.map(function(d){ return {
@@ -399,6 +400,67 @@ scenario('blackline', async (browser) => {
   const me = docs[await p.evaluate(() => window.__T.active())];
   ok(me && !me.scratch && me.key === 'file:weekly-note.md', 'and the document is that file now');
   ok(docs.filter(d => d.key === 'file:weekly-note.md').length === 1, 'listed once, not twice');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close();
+});
+
+/* Two reviews of one document, laid over each other, named at the moment the names are
+   still known. */
+scenario('merge', async (browser) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto(instrumented()); await sleep(900);
+
+  const O = 'The migration finished three weeks late and cost 206 thousand.\n\n' + A + '\n';
+  const MINE = O.replace('three weeks', '{~~three~>two~~} weeks');
+  const THEIRS = O.replace('206 thousand', '{~~206~>188.5~~}{>>@workbuddy<<} thousand')
+                  .replace('three weeks', '{~~three~>four~~} weeks');
+  await p.evaluate(([mine, theirs]) => {
+    window.__T.openDoc(mine, 'report.md', null, '', 'file:report.md');
+    window.__T.setCompare({ key: 't:theirs', name: 'report.workbuddy.md', src: theirs });
+    window.__T.setView('compare');
+  }, [MINE, THEIRS]);
+  await sleep(500);
+
+  ok(await p.evaluate(() => !!document.querySelector('button[data-act3="merge"]')),
+     'the Compare tab offers Merge reviews');
+  await p.click('button[data-act3="merge"]'); await sleep(400);
+  const names = await p.evaluate(() => ({
+    a: document.getElementById('mg-a').value, b: document.getElementById('mg-b').value }));
+  ok(names.b === 'workbuddy', "the other side's name is taken from its own marks — " + names.b);
+  ok(!!names.a && names.a !== names.b, 'and this side gets a different one — ' + names.a);
+  await p.evaluate(() => { document.getElementById('mg-a').value = 'hai'; });
+  await p.click('[data-x="go"]'); await sleep(800);
+
+  const src = await p.evaluate(() => window.__T.src());
+  ok(/\{~~three~>two~~\}\{>>@hai<<\}/.test(src), "an unsigned mark is stamped with its side's name");
+  ok(/\{~~206~>188\.5~~\}\{>>@workbuddy<<\}/.test(src), 'a signed one keeps the name it had');
+  ok(/@workbuddy：would write/.test(src), 'the suggestion on the same words is written beside it');
+  ok(await p.evaluate(() => window.__T.docs().some(d => /\(merged\)/.test(d.name))),
+     'the result opens as a document of its own');
+  ok((await p.evaluate(() => window.__T.groups())).includes('not saved to a file'),
+     'listed as what it is, having been written nowhere');
+  const strip = await p.evaluate(() => document.getElementById('bl').hidden ? null
+    : document.getElementById('bl-txt').textContent);
+  ok(strip && /This is a merge of report\.md and report\.workbuddy\.md/.test(strip),
+     'the strip says what it is, not that it is a blackline — ' + (strip || 'NONE').slice(0, 56));
+  ok(strip && /both started from/.test(strip), 'and what rejecting everything gives back');
+
+  /* two authors, two colours, at opposite ends of the circle */
+  const dots = await p.evaluate(() => [].slice.call(document.querySelectorAll('.mk .who'))
+    .map(w => ({ who: w.textContent, dot: w.querySelector('.dot').style.background })));
+  const uniq = [...new Set(dots.map(d => d.dot))];
+  ok(dots.length >= 2 && uniq.length >= 2, 'each reviewer gets a colour of their own');
+
+  /* and the one claim that matters */
+  const back = await p.evaluate(o => {
+    const s = window.__T.src();
+    window.__T.d = window.__T.parse(s);
+    return window.__T.resolveRange(0, s.length, 'orig') === o;
+  }, O).catch(() => null);
+  if(back !== null) ok(back, 'rejecting every suggestion gives the document both started from');
 
   ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();

@@ -360,6 +360,11 @@ button,input,textarea{font:inherit;color:inherit}
 .mk .txt .now{color:var(--ins)}
 .mk .txt .arrow{color:var(--ink-faint);font-family:var(--mono);font-size:11px;margin:0 5px}
 .mk .txt .quote{color:var(--ink-soft)}
+.mergew{display:flex;gap:10px;margin:12px 0 2px}
+.mergew label{flex:1 1 0;min-width:0;font-family:var(--ui);font-size:11px;color:var(--ink-faint);
+  display:flex;flex-direction:column;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mergew input{font-family:var(--ui);font-size:13px;padding:5px 8px;border:1px solid var(--rule-strong);
+  border-radius:6px;background:var(--paper);color:var(--ink);min-width:0}
 .ed .prev .warn{margin:0 0 7px;font-family:var(--ui);font-size:12px;line-height:1.5;color:var(--del);
   background:var(--del-bg);border:1px solid var(--del-line);border-radius:6px;padding:6px 9px}
 .mk .note{display:block;margin-top:4px;font-family:var(--ui);font-size:12px;line-height:1.5;
@@ -630,7 +635,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.8.1';
+var VERSION = '0.9.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1481,6 +1486,110 @@ function localOf(mk){
   var id = mk.attached ? mk.parent : mk.id;
   return (id in localIdx) ? localIdx[id] : -1;
 }
+
+/* ---------- merging two reviewers' copies ----------
+   Two people review the same document separately and come back with two files. Both reject
+   to the same original, which is what makes them mergeable at all and the first thing this
+   checks: every suggestion in either file is an edit to a piece of that original, so a
+   suggestion can be placed by where it sits in the original rather than by where it sits in
+   the file it arrived in.
+
+   Attribution comes from the merge rather than from the reviewer. An assistant signs where
+   it leaves a comment and nowhere else, so half of what it changed arrives anonymous; but
+   at the moment of merging you know which file each mark came out of, which is better
+   evidence than a model remembering to sign. Every mark that is not already signed is
+   stamped with the name given for its side.
+
+   Where the two touched the same words there is nothing to be done: CriticMarkup cannot
+   nest, so two suggestions cannot cover one span. The first is kept and the second is
+   written beside it as a comment saying what it would have done. Nothing is lost and
+   nothing is invented — the same answer the blackline gives for a block it cannot mark. */
+
+/* Every mark with the span of original text it stands on, so two files can be laid over one
+   another by that rather than by position in either. */
+function markSpans(src){
+  var saved = doc;
+  try{
+    doc = parse(src);
+    var at = 0, orig = '', out = [];
+    doc.tokens.forEach(function(tk, i){
+      if(tk.t === 'text'){ orig += tk.v; at += tk.v.length; return; }
+      if(tk.attached) return;                  /* travels with the mark it explains */
+      var was = (tk.t === 'del' || tk.t === 'sub') ? tk.rem : tk.t === 'hil' ? tk.body : '';
+      out.push({ at: at, len: was.length, t: tk.t, raw: tk.raw,
+                 who: tk.who || '', note: tk.note || (tk.t === 'com' ? tk.body : '') || '',
+                 rem: tk.rem || '', add: tk.add || '', body: tk.body || '' });
+      orig += was; at += was.length;
+    });
+    return { orig: orig, marks: out };
+  } finally { doc = saved; }
+}
+function stampOf(m, side){
+  var who = m.who || side;
+  if(!who && !m.note) return '';
+  return '{>>' + (who ? '@' + who + (m.note ? '：' + m.note : '') : m.note) + '<<}';
+}
+/* A comment can hold anything except the three characters that end one. The quoted text is
+   a description of a suggestion rather than the suggestion itself, so spacing it is a
+   smaller loss than a comment that swallows the rest of the file. */
+function sayable(t, max){
+  t = String(t).replace(/<<\}/g, '<< }').replace(/\s+/g, ' ').trim();
+  return t.length > max ? t.slice(0, max - 1) + '…' : t;
+}
+function describe(m){
+  if(m.t === 'ins') return 'would add “' + sayable(m.add, 60) + '”';
+  if(m.t === 'del') return 'would delete “' + sayable(m.rem, 60) + '”';
+  if(m.t === 'sub') return 'would write “' + sayable(m.add, 50) + '” instead of “' + sayable(m.rem, 50) + '”';
+  if(m.t === 'hil') return 'marked “' + sayable(m.body, 60) + '”';
+  return sayable(m.note || m.body, 90);
+}
+function mergeReviews(mine, theirs, nameA, nameB){
+  var A, B;
+  try { A = markSpans(mine); B = markSpans(theirs); }
+  catch(e){ return { ok: false, why: 'One of the two files could not be read.' }; }
+  if(A.orig !== B.orig){
+    return { ok: false, why: 'These are not two reviews of one document. Rejecting every ' +
+      'suggestion in each gives different text, so there is no original to lay them over — ' +
+      'one of them has been edited outside its marks, or they started from different files.' };
+  }
+  var all = [];
+  A.marks.forEach(function(m, i){ all.push({ m: m, side: nameA, ord: i, b: 0 }); });
+  B.marks.forEach(function(m, i){ all.push({ m: m, side: nameB, ord: i, b: 1 }); });
+  /* by where they stand in the original; yours first where both begin at the same point,
+     so the file you are holding stays the one you recognise */
+  all.sort(function(x, y){ return (x.m.at - y.m.at) || (x.b - y.b) || (x.ord - y.ord); });
+
+  var out = '', cur = 0, conflicts = [];
+  all.forEach(function(e){
+    var m = e.m;
+    if(m.at < cur){
+      /* its text is already inside someone else's mark, and a mark cannot hold a mark */
+      conflicts.push({ who: e.side, what: describe(m) });
+      out += '{>>@' + e.side + '：' + sayable(describe(m), 110) + ' — the words are inside ' +
+             'another suggestion, so this one is written here rather than made<<}';
+      return;
+    }
+    out += A.orig.slice(cur, m.at);
+    out += m.raw + stampOf(m, e.side);
+    cur = m.at + m.len;
+  });
+  out += A.orig.slice(cur);
+
+  /* Asked of the parser rather than assumed, exactly as the blackline is. Only the reject
+     side is checked, because there is no single right answer for the other one: accepting
+     everything here means accepting two people's suggestions at once, which is a document
+     neither of them wrote and nobody asked for. What has to be true is that saying no to
+     all of it gives back the document they both started from. */
+  var held = (function(){
+    var saved = doc, okA = false;
+    try { doc = parse(out); okA = resolveRange(0, out.length, 'orig') === A.orig; }
+    catch(e){ okA = false; } finally { doc = saved; }
+    return okA;
+  })();
+  return { ok: !!held, src: out, orig: A.orig, conflicts: conflicts,
+           why: held ? '' : 'The merged file does not read back as the document both reviews ' +
+                            'started from, so it was not opened.' };
+}
 /* A hue per author, spaced across the circle rather than hashed onto it. Hashing gave two
    reviewers of one document 96° and 117° — both green, which is no answer to "who wrote
    this". The names present in the document are sorted and dealt hues evenly, so two are
@@ -1904,7 +2013,10 @@ function renderCompare(){
     '<button type="button" class="cmpbrowse" data-act3="browse" title="Compare against a file anywhere on disk">Browse…</button>' +
     (compareWith ? '<button type="button" class="cmpbrowse" data-act3="blackline" ' +
       'title="Open this comparison as a document whose differences are suggestions to accept or reject">' +
-      'Open as suggestions</button>' : '') +
+      'Open as suggestions</button>' +
+      '<button type="button" class="cmpbrowse" data-act3="merge" ' +
+      'title="Lay two reviews of one document over each other, keeping both sets of suggestions">' +
+      'Merge reviews…</button>' : '') +
     '<span class="cmpstat" id="cmpstat"></span></div>';
 
   if(!compareWith){
@@ -2068,9 +2180,11 @@ function paintStart(){
   var bl = r && r.from, strip = document.getElementById('bl');
   strip.hidden = !(bl && view === 'markup');
   if(!bl) return;
-  document.getElementById('bl-txt').innerHTML =
-    '<b>This is a blackline</b> of ' + esc(r.from.older) + ' → ' + esc(r.from.name) +
-    '. Rejecting a suggestion takes that block back to ' + esc(r.from.older) + '.';
+  document.getElementById('bl-txt').innerHTML = r.from.kind === 'merge'
+    ? '<b>This is a merge</b> of ' + esc(r.from.name) + ' and ' + esc(r.from.older) +
+      '. Rejecting every suggestion gives back the document they both started from.'
+    : '<b>This is a blackline</b> of ' + esc(r.from.older) + ' → ' + esc(r.from.name) +
+      '. Rejecting a suggestion takes that block back to ' + esc(r.from.older) + '.';
   document.getElementById('bl-adopt').textContent = 'Make it the new ' + r.from.name;
 }
 function paintStatus(){
@@ -2740,6 +2854,8 @@ nb.addEventListener('click', function(ev){
   if(br){ browseCompare(); return; }
   var bk = ev.target.closest('button[data-act3="blackline"]');
   if(bk){ openBlackline(); return; }
+  var mg = ev.target.closest('button[data-act3="merge"]');
+  if(mg){ openMerge(); return; }
   var fold = ev.target.closest('button[data-fold]');
   if(fold){
     var body = nb.querySelector('[data-foldbody="' + fold.dataset.fold + '"]');
@@ -3356,6 +3472,79 @@ function restoreFolders(){
    arrives unsaved and attached to no file — a blackline is a third document, not a new
    version of either side — so Save as… decides where it goes, and the two it came from are
    untouched either way. */
+/* Who signed most of this file? A file comes back from one reviewer, so the name on its
+   marks — where there are any — is the name for all of them. */
+function mainAuthor(src){
+  var saved = doc, best = '', tally = {};
+  try{
+    doc = parse(src);
+    doc.marks.forEach(function(m){ if(m.who) tally[m.who] = (tally[m.who] || 0) + 1; });
+    Object.keys(tally).forEach(function(k){ if(!best || tally[k] > tally[best]) best = k; });
+  }catch(e){ best = ''; } finally{ doc = saved; }
+  return best;
+}
+function cleanName(s){
+  return String(s || '').replace(/\.(md|markdown|mdown|txt)$/i, '').replace(/[：:@\s]/g, '').slice(0, 24);
+}
+/* Two reviews of one document, laid over each other. The names are asked for because this
+   is the moment they can be known: a file came back from one reviewer, so everything
+   unsigned in it is theirs, which is better evidence than an assistant remembering to sign
+   what it changed. */
+function openMerge(){
+  if(!compareWith) return;
+  var cur = docs[activeDoc];
+  var mine = mainAuthor(doc.src) || authorName() || cleanName(cur ? cur.name : 'mine') || 'mine';
+  var them = mainAuthor(compareWith.src) || cleanName(compareWith.name) || 'theirs';
+  if(them === mine) them = them + '-2';
+  var v = openPanel({
+    narrow: true,
+    title: 'Merge two reviews',
+    body: '<p class="hint">Every suggestion in both files, over the document they both reject ' +
+      'to. Anything unsigned is stamped with the name for its side — which is why they are ' +
+      'asked for here, where they are still known.</p>' +
+      '<p class="mergew"><label>' + esc(cur ? cur.name : 'this document') +
+        '<input type="text" id="mg-a" value="' + esc(mine) + '" autocomplete="off"></label>' +
+      '<label>' + esc(compareWith.name) +
+        '<input type="text" id="mg-b" value="' + esc(them) + '" autocomplete="off"></label></p>',
+    foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
+          '<button type="button" class="btn primary" data-x="go">Merge</button>'
+  });
+  v.querySelector('[data-x="cancel"]').addEventListener('click', function(){ v.remove(); });
+  v.querySelector('[data-x="go"]').addEventListener('click', function(){
+    var a = cleanName(document.getElementById('mg-a').value) || 'mine';
+    var b = cleanName(document.getElementById('mg-b').value) || 'theirs';
+    v.remove();
+    doMerge(a, b);
+  });
+  var f = v.querySelector('#mg-a');
+  if(f) f.focus();
+}
+function doMerge(a, b){
+  if(!compareWith) return;
+  var cur = docs[activeDoc], theirs = compareWith.name;
+  var r = mergeReviews(doc.src, compareWith.src, a, b);
+  if(!r.ok){
+    var w = openPanel({ narrow: true, title: 'These cannot be merged',
+      body: '<p class="hint">' + esc(r.why) + '</p>',
+      foot: '<button type="button" class="btn primary" data-x="close">Close</button>' });
+    w.querySelector('[data-x="close"]').addEventListener('click', function(){ w.remove(); });
+    return;
+  }
+  var base = (cur ? cur.name : 'document.md').replace(/\.(md|markdown|mdown|txt)$/i, '');
+  var from = cur && { key: cur.key, name: cur.name, path: cur.path, handle: cur.handle,
+                      eol: cur.eol, diskText: cur.diskText, older: theirs, kind: 'merge' };
+  compareWith = null;
+  openDoc(r.src, base + ' (merged).md', null, '', 'merged:' + base);
+  docs[activeDoc].scratch = true;
+  if(from) docs[activeDoc].from = from;
+  setView('markup');
+  render();
+  toast(openCount() + ' suggestion' + (openCount() === 1 ? '' : 's') + ' from @' + a + ' and @' + b +
+        '. Rejecting every one gives the document they both started from.' +
+        (r.conflicts.length ? ' ' + r.conflicts.length + ' touched the same words as another ' +
+         'and ' + (r.conflicts.length === 1 ? 'is' : 'are') + ' written as comments — a mark ' +
+         'cannot hold a mark.' : ''));
+}
 function openBlackline(){
   if(!compareWith) return;
   var rows = compareRows();
