@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.1.0** · [changelog](CHANGELOG.md)
+**0.5.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -314,7 +314,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.4.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.5.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -475,9 +475,9 @@ the left like any other folder. Git stays in git's hands: a web page has no busi
 packfiles, and a reader that handled only loose objects would work on a fresh repo and quietly
 stop after the first `git gc`.
 
-The view is read-only. Taking individual changes from one version into another is worth doing
-later, and belongs in a new commit rather than a revert — prose is exactly the case where you
-accept one paragraph and reject the next.
+Taking individual changes from one version into another is what **Open as suggestions** above
+is for, and it lands in a new commit rather than a revert — prose is exactly the case where you
+keep one paragraph and put the next one back.
 
 ## Browsers and platforms
 

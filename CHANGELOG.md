@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.5.0 — 2026-11-16
+
+Four things from an evening of real use, three of them about reading someone else's markup.
+
+- **A replacement is diffed again when it is drawn.** One made in this editor is already as
+  small as the change, because it came out of a word diff; one that arrived in a file need not
+  be. An assistant asked to drop two words rewrote the clause around them, and the page struck
+  all of the old beside all of the new — which tells the reader nothing about what moved, the
+  one thing they are there to find out. Now the two sides are diffed at render time, inline and
+  in the suggestion row, so a sixty-character replacement reads as
+  *the force ~~actually required~~ at the collar*. The file is untouched: the mark is still one
+  suggestion, taken or dropped whole, because that is what the file says and what accepting it
+  will do. Where the two sides share almost nothing the clause really was rewritten, and two
+  blocks of text read better than a speckle of struck and inserted words, so that is left alone.
+- **Clicking back to an open file re-reads it.** A document already open was shown out of
+  memory, which is right up to the moment the file changes underneath — and nothing locks a
+  file, so another editor, a sync client, or the assistant that was just asked to rewrite it can
+  have moved it on. Opening A, then B, then A again showed A as it was when first read, with no
+  sign the file had changed, and a review done against that would have been saved back over the
+  new version. The save-time check caught it, but only after the reading was wasted. If there
+  are no unsaved changes the file is reloaded and says so; if there are, it says that too and
+  leaves the choice to the save, which already knows how to offer it.
+- **A selection inside a suggestion brings up the popover.** Only plain runs carry an offset
+  into the source, so a selection lying entirely inside a deletion or a replacement mapped
+  nowhere and nothing appeared at all — struck words could be copied with the keyboard and no
+  other way. They can be copied from the popover now, with a line saying why a comment cannot
+  anchor there.
+- **Edit** joins Copy and Comment on the popover, and opens that block for editing. Reading a
+  suggestion and wanting to rewrite the prose around it are a sentence apart, and the way there
+  was to dismiss the selection and find the block again.
+- The version under the README's title is checked against the page and the changelog. It sat at
+  0.1.0 through three releases because nothing was watching it. The line claiming the Compare
+  tab is read-only went the same way, two releases after it stopped being true.
+
 ## 0.4.0 — 2026-11-16
 
 - `tools/panel.mjs <file>` opens a file for review in a browser and writes back what you

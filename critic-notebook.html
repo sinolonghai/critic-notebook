@@ -280,6 +280,14 @@ button,input,textarea{font:inherit;color:inherit}
   text-decoration-color:var(--ins-line);text-decoration-thickness:1.5px;text-underline-offset:2.5px;padding:.04em .1em}
 .cm.del{color:var(--del);background:var(--del-bg);text-decoration:line-through;
   text-decoration-color:var(--del-line);text-decoration-thickness:1.5px;padding:.04em .1em}
+/* the two sides of a replacement, diffed again at drawing time: the words that actually
+   moved carry the marks, the words both sides agree on are left as prose */
+.cm.fine{background:none;padding:0}
+.cm.fine .wd.ins{color:var(--ins);background:var(--ins-bg);text-decoration:underline;
+  text-decoration-color:var(--ins-line);text-decoration-thickness:1.5px;text-underline-offset:2.5px;padding:.04em .1em;border-radius:3px}
+.cm.fine .wd.del{color:var(--del);background:var(--del-bg);text-decoration:line-through;
+  text-decoration-color:var(--del-line);text-decoration-thickness:1.5px;padding:.04em .1em;border-radius:3px}
+.cm.fine.num .wd{outline:1px dashed var(--note);outline-offset:1px}
 .cm.hil{background:var(--hil-bg);padding:.04em .12em}
 .cm.dagger{font-family:var(--ui);color:var(--note);background:var(--note-bg);font-size:.7em;
   padding:.1em .34em;vertical-align:.32em;border-radius:4px;font-weight:600;line-height:1;cursor:pointer}
@@ -605,7 +613,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.4.0';
+var VERSION = '0.5.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1469,6 +1477,41 @@ function figureCount(){
   return doc.marks.filter(function(m){ return !m.attached && changesFigure(m); }).length;
 }
 
+/* A replacement made in this editor is already as small as the change, because it came out of
+   a word diff. One that arrived in a file need not be: an assistant asked to drop two words
+   will cheerfully rewrite the clause around them, and striking all of the old beside all of
+   the new tells the reader nothing about what moved — which is the one thing they are there
+   to find out. So the two sides are diffed again when the mark is drawn.
+
+   The mark itself is untouched. It is still one suggestion, taken or dropped whole, which is
+   what the file says and what accepting it will do; only the reading is made easier, and the
+   file is not quietly rewritten to match a nicer picture of it. Where the two sides share
+   almost nothing the clause really was rewritten, and two blocks of text read better than a
+   speckle of struck and inserted words, so that case is left as it was. */
+var FINE_AT = 0.3;
+function subPieces(mk, render, delCls, insCls){
+  var ops = diffTokens(tokenize(mk.rem), tokenize(mk.add));
+  var same = 0, total = 0;
+  ops.forEach(function(o){ total += o[1].length; if(o[0] === '=') same += o[1].length; });
+  if(!total || same / total < FINE_AT) return null;
+  var out = '', i = 0;
+  while(i < ops.length){
+    if(ops[i][0] === '='){ out += render(ops[i][1]); i++; continue; }
+    var dels = '', inss = '';
+    while(i < ops.length && ops[i][0] !== '='){
+      if(ops[i][0] === '-') dels += ops[i][1]; else inss += ops[i][1];
+      i++;
+    }
+    if(dels) out += '<span class="' + delCls + '">' + render(dels) + '</span>';
+    if(inss) out += '<span class="' + insCls + '">' + render(inss) + '</span>';
+  }
+  return out;
+}
+function subHtml(mk, fig, box){
+  var fine = subPieces(mk, flat, 'wd del', 'wd ins');
+  if(fine) return box('fine' + fig, fine);
+  return box('del' + fig, flat(mk.rem)) + box('ins' + fig, flat(mk.add));
+}
 function markHtml(mk){
   if(!mk) return '';
   var tag = ' data-mi="' + localOf(mk) + '"';
@@ -1487,7 +1530,7 @@ function markHtml(mk){
   var fig = changesFigure(mk) ? ' num' : '';
   if(mk.t === 'ins') return box('ins' + fig, flat(mk.add));
   if(mk.t === 'del') return box('del' + fig, flat(mk.rem));
-  if(mk.t === 'sub') return box('del' + fig, flat(mk.rem)) + box('ins' + fig, flat(mk.add));
+  if(mk.t === 'sub') return subHtml(mk, fig, box);
   if(mk.t === 'com') return box('dagger', '‡');
   return box('hil', flat(mk.body));
 }
@@ -1499,7 +1542,13 @@ function markRow(mk, mi){
   var txt;
   if(mk.t === 'ins') txt = '<span class="now">' + e(mk.add) + '</span>';
   else if(mk.t === 'del') txt = '<span class="was">' + e(mk.rem) + '</span>';
-  else if(mk.t === 'sub') txt = '<span class="was">' + e(mk.rem) + '</span><span class="arrow">→</span><span class="now">' + e(mk.add) + '</span>';
+  else if(mk.t === 'sub'){
+    /* the same second diff the inline mark gets: a row reading as two long clauses with an
+       arrow between them is the thing this is here to spare the reader */
+    var fine = subPieces(mk, e, 'was', 'now');
+    txt = fine ? fine
+        : '<span class="was">' + e(mk.rem) + '</span><span class="arrow">→</span><span class="now">' + e(mk.add) + '</span>';
+  }
   else if(mk.t === 'hil') txt = '<span class="quote">' + e(mk.body) + '</span>';
   else txt = '';
 
@@ -2642,6 +2691,8 @@ function selRange(){
   var el = r.commonAncestorContainer;
   el = el.nodeType === 3 ? el.parentNode : el;
   if(!el || !el.closest || !el.closest('.out[data-cell]')) return null;
+  var host = el.closest('.cell[data-idx]');
+  var at = host ? +host.dataset.idx : -1;
 
   var spans = nb.querySelectorAll('.out .tx'), hits = [];
   for(var i = 0; i < spans.length; i++){
@@ -2658,16 +2709,24 @@ function selRange(){
     var e = (ce > 0) ? (r.endContainer === tn ? r.endOffset : len) : len;
     if(e > s) hits.push({ o: cell.w0 + (+spans[i].getAttribute('data-o')) + s, len: e - s });
   }
-  if(!hits.length) return null;
+  if(!hits.length){
+    /* Only plain runs carry an offset, so a selection lying entirely inside a deletion or
+       a replacement maps nowhere in the source. It can still be copied, and the block it
+       sits in can still be opened — and neither was reachable: selecting a struck word
+       brought up nothing at all, and the only way to lift the words out was the keyboard. */
+    var raw = String(window.getSelection());
+    if(at < 0 || !raw.trim()) return null;
+    return { err: 'inmark', raw: raw, cell: at };
+  }
   var A = wToSrc(hits[0].o), last = hits[hits.length - 1], B = wToSrc(last.o + last.len);
   if(!A || !B) return null;
   if(B.src <= A.src) return null;
   /* A comment has to anchor to one unmarked, single-line run; copying does not, so the
      offsets come back either way and only the comment half is refused. */
-  if(A.seg !== B.seg) return { a: A.src, b: B.src, err: 'cross' };
+  if(A.seg !== B.seg) return { a: A.src, b: B.src, cell: at, err: 'cross' };
   var text = doc.src.slice(A.src, B.src);
-  if(/\n/.test(text)) return { a: A.src, b: B.src, err: 'line' };
-  return { a: A.src, b: B.src, text: text };
+  if(/\n/.test(text)) return { a: A.src, b: B.src, cell: at, err: 'line' };
+  return { a: A.src, b: B.src, cell: at, text: text };
 }
 
 var pop = null, popRect = null;
@@ -2689,7 +2748,9 @@ function clip(s, n){ s = String(s).replace(/\s+/g, ' '); return s.length > n ? s
    current view reads: Original gives what was there, every other view gives what is proposed. */
 function copyMode(){ return view === 'original' ? 'orig' : 'prop'; }
 function copyOf(range){
-  if(!range || range.a === undefined) return '';
+  if(!range) return '';
+  if(range.raw !== undefined) return range.raw;   /* inside a mark: what you see is what there is */
+  if(range.a === undefined) return '';
   return resolveRange(range.a, range.b, copyMode());
 }
 function copyNote(range, text){
@@ -2721,6 +2782,14 @@ function toClipboard(text){
   return Promise.resolve(legacyCopy(text));
 }
 
+/* Reading a suggestion and wanting to rewrite the block around it are a sentence apart, and
+   the way there was to dismiss the selection and find the block again — so the offer belongs
+   on the selection. A fenced block has no editor to open. */
+function canEditHere(range){
+  if(!range || range.cell === undefined || range.cell < 0) return false;
+  var c = doc.cells[range.cell];
+  return !!c && !c.locked;
+}
 function openPop(range, rect){
   hidePop();
   pop = document.createElement('div');
@@ -2739,13 +2808,20 @@ function openPop(range, rect){
     '<p class="sel">“' + esc(clip(preview, 38)) + '”</p>' +
     (range.err ? '<p class="err">' +
       (range.err === 'cross' ? 'A comment has to anchor to plain text, and this selection takes in a suggestion.'
+                             : range.err === 'inmark' ? 'A comment has to anchor to plain text, and this selection is inside a suggestion.'
                              : 'A comment has to stay on one line.') + '</p>' : '') +
     '<div class="row"><button type="button" data-x="close">Cancel</button>' +
     '<button type="button" data-x="copy">Copy</button>' +
+    (canEditHere(range) ? '<button type="button" data-x="edit">Edit</button>' : '') +
     (range.err ? '' : '<button type="button" class="go" data-x="comment">Comment</button>') +
     '</div>';
   placePop();
   pop.querySelector('[data-x="close"]').addEventListener('click', hidePop);
+  if(canEditHere(range)) pop.querySelector('[data-x="edit"]').addEventListener('click', function(){
+    var at = range.cell;
+    hidePop();
+    openEditor(at);
+  });
   pop.querySelector('[data-x="copy"]').addEventListener('click', function(){
     var text = copyOf(range);
     toClipboard(text).then(function(ok){
@@ -3121,10 +3197,43 @@ function openDoc(text, name, handle, path, key){
   toast(n ? rec.name + ' — ' + n + ' suggestion' + (n === 1 ? '' : 's') + ' to review'
           : rec.name + ' — no suggestions yet');
 }
+/* Take a file's text into a record that already exists, the way openDoc would have. */
+function adoptText(r, raw){
+  var clean = raw.replace(/^﻿/, '');
+  var crlf = (clean.match(/\r\n/g) || []).length;
+  r.eol = (crlf > 0 && crlf >= (clean.match(/\n/g) || []).length / 2) ? '\r\n' : '\n';
+  r.src = clean.replace(/\r\n?/g, '\n');
+  r.savedSrc = r.src; r.diskText = r.src; r.history = []; r.scrollTop = 0;
+}
+/* A document already open is shown out of memory, which is right up to the moment the file
+   changes underneath it. Nothing locks a file — another editor, a sync client, or the
+   assistant that was asked to rewrite it — so clicking back to a file in the tree was showing
+   the text as it was when it was first read, with no sign that the file had moved on, and the
+   next save would have put that stale text back over it. The save-time check caught that, but
+   only after a review had been done against the wrong text. So read the file on the way in. */
+function activateFresh(i){
+  var r = docs[i];
+  if(!r || !r.handle || !CAN_FS){ activate(i); return; }
+  r.handle.getFile().then(function(f){ return f.text(); }).then(function(t){
+    var now = normDisk(t), known = r.diskText;
+    if(known === null || known === undefined || now === known){ activate(i); return; }
+    if(r.src === r.savedSrc){
+      /* nothing of yours to lose here: take what the file says */
+      adoptText(r, t);
+      activate(i);
+      toast(r.name + ' changed on disk — reloaded');
+      return;
+    }
+    /* there are unsaved changes on both sides; say so and leave the choice to the save,
+       which already knows how to offer it */
+    activate(i);
+    toast(r.name + ' changed on disk, and this copy has unsaved changes — saving will ask');
+  }).catch(function(){ activate(i); });
+}
 function openFile(f){
   if(f.loading) return;
   var i = findDoc(f.key);
-  if(i >= 0){ if(i !== activeDoc) guardDirty(function(){ activate(i); }); return; }
+  if(i >= 0){ if(i !== activeDoc) guardDirty(function(){ activateFresh(i); }); return; }
   guardDirty(function(){
     f.loading = true;
     f.handle.getFile()
@@ -3165,7 +3274,7 @@ document.getElementById('doclist').addEventListener('click', function(ev){
   files.forEach(function(x){ if(x.key === key) f = x; });
   if(f){ openFile(f); return; }
   var i = findDoc(key);
-  if(i >= 0 && i !== activeDoc) guardDirty(function(){ activate(i); });
+  if(i >= 0 && i !== activeDoc) guardDirty(function(){ activateFresh(i); });
 });
 
 /* ===================== unsaved-changes gate ===================== */

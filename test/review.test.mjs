@@ -2,6 +2,7 @@ import fs from 'fs';
 const PAGE = new URL('../critic-notebook.html', import.meta.url);
 /* resolved here, before the DOM shims replace global.URL with a blob-download stub */
 const CHANGELOG = new URL('../CHANGELOG.md', import.meta.url);
+const README = new URL('../README.md', import.meta.url);
 let code = fs.readFileSync(PAGE,'utf8').match(/<script>\n([\s\S]*)<\/script>/)[1];
 code = injectExports(code,
   `globalThis.__t={
@@ -383,6 +384,12 @@ ok(typeof T.cmpPoint === 'function', 'cmpPoint is defined (no Range.comparePoint
   ok(!!chg,  'changelog has a version heading');
   ok(page && chg && page[1] === chg[1],
      'page and changelog agree on the version (' + (page&&page[1]) + ' vs ' + (chg&&chg[1]) + ')');
+  /* the line under the title, which sat at 0.1.0 through three releases because nothing
+     was watching it */
+  const rd = fs.readFileSync(README,'utf8').match(/^\*\*([0-9]+\.[0-9]+\.[0-9]+)\*\*/m);
+  ok(!!rd, 'README names a version under the title');
+  ok(rd && page && rd[1] === page[1],
+     'and it is the same one (' + (rd&&rd[1]) + ' vs ' + (page&&page[1]) + ')');
 }
 
 console.log('\n'+(fails?fails+' FAILURE(S)':'ALL PASS'));
