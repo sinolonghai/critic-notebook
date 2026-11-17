@@ -101,19 +101,34 @@ ok(T.resolveRange(0,T.d.src.length,'orig')==='ABC','original still ABC after 2 e
 setup(hist.pop() && hist[hist.length] || afterFirst);
 ok(T.resolveRange(0,T.d.src.length,'prop')==='abc','one undo → abc state recoverable');
 
-// ===== 4. repeated edits must NOT accumulate author stamps =====
+// ===== 4. one stamp per mark, and no mark stamped twice =====
+/* Every mark carries a name, because a tracked change nobody can be asked about is not much
+   of a history — but editing a block over and over must not pile stamps onto the marks that
+   were already there. A mark that has not changed comes back with the name it had. */
 setup('One two three.');
 function commitAs(text,who){
   const c=T.d.cells[0];
   const b=T.buildBlockSource(c,text,'{>>@'+who+'<<}');
-  const kept=b.changed?T.cellComments(c,who):'';
+  const kept=b.changed?T.cellComments(c,who,b.used):'';
   setup(T.d.src.slice(0,c.a)+b.src+kept+T.d.src.slice(c.b));
 }
 commitAs('One TWO three.','dana');
 commitAs('One TWO THREE.','dana');
 commitAs('ONE TWO THREE.','dana');
 const stamps=(T.d.src.match(/\{>>@dana<<\}/g)||[]).length;
-ok(stamps===1,'3 edits by same author → '+stamps+' stamp(s): '+T.d.src);
+const marks3=(T.d.src.match(/\{~~/g)||[]).length;
+ok(marks3===3&&stamps===3,'3 edits by one author → '+marks3+' marks, '+stamps+' stamps: '+T.d.src);
+ok(!/\{>>@dana<<\}\{>>@dana<<\}/.test(T.d.src),'no mark is stamped twice');
+ok(!/\{>>@dana<<\}$/.test(T.d.src.replace(/\n+$/,'')),'and no stamp is left loose at the end');
+
+/* a second reviewer editing the same block keeps the first one's name on their suggestion */
+setup('The migration finished three weeks late.');
+commitAs('The migration finished two weeks late.','ai');
+commitAs('The rollout finished two weeks late.','hai');
+ok(/\{~~three~>two~~\}\{>>@ai<<\}/.test(T.d.src),'the first reviewer keeps their name: '+T.d.src);
+ok(/\{~~migration~>rollout~~\}\{>>@hai<<\}/.test(T.d.src),'and the second one gets theirs');
+ok(T.resolveRange(0,T.d.src.length,'orig')==='The migration finished three weeks late.',
+   'with the original still underneath');
 
 // a real comment by someone else must survive repeated edits
 setup('Keep this {==phrase==}{>>@erin: unclear<<} here.');

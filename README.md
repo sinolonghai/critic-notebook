@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.9.0** · [changelog](CHANGELOG.md)
+**0.9.1** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -197,7 +197,11 @@ that block.
 | Merge two reviews | the **Compare** tab, then **Merge reviews…** |
 
 Set a name in the `Sign as` field and your suggestions are attributed with `@name`; each author
-gets a colour.
+gets a colour. Every mark is signed, not one per edit — tracked changes trade verbosity for a
+history, and a mark nobody can be asked about is not much of one. Reviewing in turn keeps that
+straight: open a document someone else has marked up and the editor hands you their proposed
+text as prose, and a suggestion of theirs that you leave alone comes back with their name and
+their note still on it.
 
 ### Spelling and grammar
 
@@ -325,7 +329,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.9.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.9.1' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }

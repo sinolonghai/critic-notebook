@@ -405,6 +405,58 @@ scenario('blackline', async (browser) => {
   await ctx.close();
 });
 
+/* Two reviewers in turn, through the editor rather than the merge: the second one opens a
+   paragraph the first has already marked and changes something else in it. The block is
+   rebuilt from the original either way, so the first reviewer's name has to survive the
+   rebuild — it did not, and their comment ended up adrift at the end of the block. */
+scenario('in-turn', async (browser) => {
+  const O = 'The migration finished three weeks late and cost 206 thousand.\n\n' + A + '\n';
+  const AFTER_AI = O.replace('three weeks',
+    '{~~three~>two~~}{>>@ai：from the deploy log<<} weeks');
+  const f = fixture('turn.md', AFTER_AI);
+  const { url, proc } = await servePanel(f);
+  const ctx = await browser.newContext({ viewport: { width: 1000, height: 860 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto(url); await sleep(1300);
+  const fr = frameOf(p);
+
+  await fr.evaluate(() => { document.getElementById('author').value = 'hai'; });
+  await fr.evaluate(() => document.querySelector('.out[data-cell]').click());
+  await sleep(400);
+  const handed = await fr.evaluate(() => document.getElementById('edbox').value);
+  ok(/two weeks/.test(handed) && !/\{/.test(handed),
+     'the second reviewer is handed what the first proposed, as prose');
+
+  await fr.evaluate(() => { const t = document.getElementById('edbox');
+    t.value = t.value.replace('migration', 'rollout').replace('206', '188.5');
+    t.dispatchEvent(new Event('input', { bubbles: true })); });
+  await sleep(300);
+  await fr.evaluate(() => { const o = document.querySelectorAll('.out[data-cell]'); o[o.length - 1].click(); });
+  await sleep(500);
+  await fr.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  await sleep(500);
+
+  const rows = await fr.evaluate(() => [].slice.call(document.querySelectorAll('.mk')).map(r => ({
+    txt: (r.querySelector('.txt') || {}).textContent.replace(/\s+/g, ' ').trim(),
+    who: (r.querySelector('.who') || {}).textContent || null })));
+  const find = t => rows.find(r => r.txt.indexOf(t) === 0) || {};
+  ok(find('three').who === '@ai', "the first reviewer's suggestion keeps their name — " + find('three').who);
+  ok(/from the deploy log/.test(find('three').txt), 'and their note stays on it rather than drifting off');
+  ok(find('migration').who === '@hai', "the second reviewer's own change is theirs");
+  ok(find('206').who === '@hai', 'including the second mark of the same edit');
+  ok(rows.length === 3, 'three suggestions, no comment left loose — ' + rows.length);
+
+  await fr.evaluate(() => document.getElementById('btn-save').click());
+  await sleep(900);
+  const disk = fs.readFileSync(f, 'utf8');
+  ok(disk.replace(/\{~~([\s\S]*?)~>[\s\S]*?~~\}/g, '$1').replace(/\{>>[\s\S]*?<<\}/g, '') === O,
+     'and rejecting everything still gives the document the first reviewer started from');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close(); proc.kill();
+});
+
 /* Two reviews of one document, laid over each other, named at the moment the names are
    still known. */
 scenario('merge', async (browser) => {

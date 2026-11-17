@@ -635,7 +635,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.9.0';
+var VERSION = '0.9.1';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1160,10 +1160,33 @@ function emitGroup(dels, inss){
   var mid = (dels && inss) ? '{~~' + dels + '~>' + inss + '~~}'
           : dels ? '{--' + dels + '--}'
           : inss ? '{++' + inss + '++}' : '';
-  return { pre: pre, mid: mid, suf: suf };
+  return { pre: pre, mid: mid, suf: suf, rem: dels, add: inss };
 }
-function opsToSource(ops, stamp){
-  var out = '', i = 0, stamped = false;
+function stampText(who, note){
+  who = who || ''; note = (note || '').trim();
+  if(!who && !note) return '';
+  return '{>>' + (who ? '@' + who + (note ? '：' + note : '') : note) + '<<}';
+}
+function markKey(rem, add){ return (rem || '') + '\u0000' + (add || ''); }
+/* What this block already says about who proposed what. A block is rebuilt from the original
+   and the text you typed, so every mark in it is derived afresh — and a mark that was already
+   there and has not changed has to come back with the name and the note it had, or one pass
+   of review quietly erases the one before it. That is what happened: a second reviewer who
+   edited a paragraph left the first reviewer's suggestion standing with nobody's name on it
+   and their comment adrift at the end of the block. Keyed by what the mark does, because that
+   is the only thing that survives a rebuild. */
+function carryOf(cell){
+  var carry = {};
+  doc.marks.forEach(function(mk){
+    if(mk.attached || mk.start < cell.a || mk.end > cell.b) return;
+    if(mk.t !== 'ins' && mk.t !== 'del' && mk.t !== 'sub') return;
+    var k = markKey(mk.rem, mk.add);
+    if(!(k in carry)) carry[k] = stampText(mk.who, mk.note);
+  });
+  return carry;
+}
+function opsToSource(ops, stamp, carry, used){
+  var out = '', i = 0;
   while(i < ops.length){
     if(ops[i][0] === '='){ out += ops[i][1]; i++; continue; }
     var dels = '', inss = '';
@@ -1173,7 +1196,13 @@ function opsToSource(ops, stamp){
     }
     var g = emitGroup(dels, inss);
     out += g.pre + g.mid;
-    if(g.mid && stamp && !stamped){ out += stamp; stamped = true; }
+    if(g.mid){
+      /* every mark is signed, not only the first one of an edit. Tracked changes trade
+         verbosity for a history, and a mark nobody can be asked about is not much of one. */
+      var k = markKey(g.rem, g.add);
+      var sig = (carry && carry[k] !== undefined) ? carry[k] : (stamp || '');
+      if(sig){ out += sig; if(used) used[sig] = 1; }
+    }
     out += g.suf;
   }
   return out;
@@ -1193,8 +1222,10 @@ function maybeSignHint(){
 function tidy(s){
   return scrub(s).replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n+$/, '');
 }
-function cellComments(cell, skipWho){
-  var seen = {};
+/* `seen` arrives holding whatever the rebuild has already written onto a mark, so a comment
+   carried back to the suggestion it belongs to is not also left loose at the end. */
+function cellComments(cell, skipWho, seen){
+  seen = seen || {};
   return doc.marks.filter(function(m){
     return m.t === 'com' && m.start >= cell.a && m.end <= cell.b;
   }).map(function(m){
@@ -1210,8 +1241,10 @@ function cellComments(cell, skipWho){
 function buildBlockSource(cell, newText, stamp){
   var base = resolveRange(cell.a, cell.b, 'orig');
   var want = tidy(newText);
-  if(want === base) return { src: want, changed: false, base: base };
-  return { src: opsToSource(diffTokens(tokenize(base), tokenize(want)), stamp || ''), changed: true, base: base };
+  if(want === base) return { src: want, changed: false, base: base, used: {} };
+  var used = {};
+  var src = opsToSource(diffTokens(tokenize(base), tokenize(want)), stamp || '', carryOf(cell), used);
+  return { src: src, changed: true, base: base, used: used };
 }
 
 /* ===================== compare ===================== */
@@ -2775,7 +2808,7 @@ function flushEditor(){
   var cell = doc.cells[wasCell];
   if(!cell) return false;
   var built = buildBlockSource(cell, text, stamp);
-  var kept = built.changed ? cellComments(cell, who) : '';
+  var kept = built.changed ? cellComments(cell, who, built.used) : '';
   var hadDelims = DANGER_RE.test(text);
   DANGER_RE.lastIndex = 0;
   editSource(cell.a, cell.b, built.src + kept);

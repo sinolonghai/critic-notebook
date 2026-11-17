@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.1 — 2026-11-17
+
+Two reviewers in turn — one marks a document up, the next opens it and keeps going — worked,
+in that both sets of changes ended in one file and rejecting everything still gave the
+original back. What it did not do was keep track of whose was whose, which is most of the
+point.
+
+- **A mark keeps the name it had when its block is rebuilt.** Editing a block derives every
+  mark in it afresh from the original, so a suggestion the last reviewer left came back with
+  nobody's name on it and their comment adrift at the end of the paragraph. A mark that was
+  already there and has not changed now returns with its name and its note, keyed by what the
+  mark does, since that is the only thing that survives a rebuild. One pass of review no
+  longer erases the one before it.
+- **Every mark is signed, not only the first of an edit.** One edit that changed two words in
+  a paragraph produced two suggestions and stamped one of them. Tracked changes trade
+  verbosity for a history, and a mark nobody can be asked about is not much of a history.
+- A comment carried back onto the suggestion it belongs to is no longer also left loose at the
+  end of the block.
+- `test/review.test.mjs` asserts the new rule where it asserted the old one, and gains the
+  case this came from: a second reviewer editing a paragraph the first had marked. An
+  `in-turn` scenario joins the browser suite for the same thing through the editor itself.
+
 ## 0.9.0 — 2026-11-17
 
 - **Merge reviews…** in the Compare tab: two people who reviewed the same document apart from
