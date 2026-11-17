@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.1 — 2026-11-17
+
+- Joining asks first in every case, including two plain paragraphs where nothing can go
+  wrong. The button is small and sits in the margin between every pair of blocks, so the cost
+  of a stray click has to be a dialog rather than a changed document — Word makes you press
+  backspace twice for the same reason. Where there is nothing to warn about the panel says
+  so and nothing more.
+- The controls between blocks are 15×12, about half the area they were.
+
 ## 0.7.0 — 2026-11-17
 
 - **Any two blocks can be joined**, and any block can be split. Joining was offered only
