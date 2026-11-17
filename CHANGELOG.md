@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.0 — 2026-11-17
+
+- `test/browser.test.mjs` — the checks that need a real browser, kept rather than thrown away.
+  Eight scenarios: a file re-read when you click back to it, a selection inside a deletion, the
+  **Delete** on a selection and the spacing it takes with it, the paragraph controls and what
+  joining writes, the warning a blank line in a table gets while you type it, a comparison
+  adopting the file it was made against, eight viewport widths in both modes, and
+  `tools/panel.mjs` end to end including the token that guards its port. About a minute for all
+  of it, or `node test/browser.test.mjs join widths` for some.
+
+  These assert what the other three suites cannot see: whether a control is on screen, what a
+  selection reaches, whether a click writes a file, whether the layout survives a panel's
+  width. Most of what has broken in a week of use broke there rather than in the parser, and
+  every one of these was written the day its bug was found and then thrown away — which is why
+  the same ground had to be walked twice more.
+
+  Playwright is the project's only dev dependency and is not required: without it the suite
+  says so and exits 0, so `node test/*.test.mjs` stays green on a fresh clone. `CN_PLAYWRIGHT`
+  and `CN_CHROME` point at an install elsewhere. The page is served or opened as it ships; the
+  two scenarios that have to reach inside it write a copy to a temp directory with a hook
+  appended, the same trick the node suites use. Nothing is added to the file that ships.
+
 ## 0.7.3 — 2026-11-17
 
 - A panel with nothing in its body is drawn as a question and two buttons, sized to what it

@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.7.3** · [changelog](CHANGELOG.md)
+**0.8.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -127,7 +127,12 @@ Only needed if you are changing the tool. Node 18 or newer, no packages to insta
 ```sh
 node test/review.test.mjs      # unit: the cases that have broken before
 node test/documents.test.mjs   # whole documents end to end
+node test/blackline.test.mjs   # a comparison written out, and read back as both versions
+node test/browser.test.mjs     # the interface, in a real browser — needs Playwright
 ```
+
+The first three need nothing installed. The last one skips itself, and says how to get
+Playwright, if it is not there.
 
 ## Using it
 
@@ -318,7 +323,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.7.3' }
+page → host   { type: 'ready', protocol: 1, version: '0.8.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -525,6 +530,40 @@ every text offset maps exactly, reject-all and accept-all reproduce the original
 byte-for-byte, editing each cell in turn round-trips both ways, and no markdown leaks into the
 output as literal text.
 
+`blackline.test.mjs` asserts the same invariant across a whole comparison — reject everything
+and you have the older version, accept everything and you have the newer — on the cases that
+have broken: additions and removals at the top, the middle and the end, runs of both at once,
+lists, tables and fences, documents entirely new or entirely gone, and the one shape the format
+cannot take.
+
+### The browser suite
+
+```sh
+node test/browser.test.mjs                 # all of it, about a minute
+node test/browser.test.mjs join widths     # only the named scenarios
+```
+
+The three suites above run the page's functions in node and assert on text. This one asserts
+what text cannot see: whether a control is on screen, what a selection reaches, whether a click
+writes a file, whether the layout survives a panel's width. Most of what has broken in a week of
+use broke here rather than in the parser, and each scenario was written the day its bug was
+found — `stale` for a file re-read on the way back in, `pop` for a selection inside a deletion,
+`join` and `split-warning` for the paragraph controls, `blackline` for a comparison adopting the
+file it was made against, `widths` for eight viewport widths in both modes, `panel-tool` for
+`tools/panel.mjs` end to end, including the token that guards its port.
+
+Playwright is the project's only dev dependency and is not required: without it the suite says
+so and exits 0, so `node test/*.test.mjs` stays green on a fresh clone.
+
+```sh
+npm install playwright && npx playwright install chromium
+```
+
+`CN_PLAYWRIGHT` points at an install elsewhere and `CN_CHROME` at a browser binary, for a
+shared install or a CI cache. The page is served or opened exactly as it ships; the two
+scenarios that have to reach inside it write a copy to a temp directory with a hook appended,
+the same trick the node suites use. Nothing is added to the file that ships.
+
 ### The two sample folders
 
 | | |
@@ -604,11 +643,6 @@ same original **in parallel**, both sets of changes merged into one document wit
 attributed. Needs a common ancestor — `git merge-base` where there is a repo, and asking
 otherwise — and a way to show a genuine conflict, which CriticMarkup has no syntax for. Worth
 designing only once two people are actually editing the same file.
-
-**Browser tests in the repo.** The node suites cannot reach the interface, and three bugs so
-far were visible only in a browser: an empty bullet in Original, a comment row with no way to
-edit it, a column that collapsed to five words wide. Playwright would be the first real
-dev dependency, so the test files would need to skip cleanly when it is absent.
 
 **Read git directly.** It would remove `tools/history.mjs`, since the page already holds a
 handle on the repository and browsers now decompress zlib natively. Loose objects are easy;
