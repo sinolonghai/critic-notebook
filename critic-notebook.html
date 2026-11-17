@@ -2785,6 +2785,25 @@ function toClipboard(text){
 /* Reading a suggestion and wanting to rewrite the block around it are a sentence apart, and
    the way there was to dismiss the selection and find the block again — so the offer belongs
    on the selection. A fenced block has no editor to open. */
+/* Deleting needs what commenting needs — a run of plain text the offsets can reach — but
+   not the single line, since a newline inside a deletion is exactly how a whole block is
+   removed. A selection sitting inside a suggestion has no offsets at all and is refused. */
+function canDeleteHere(range){
+  if(!range || range.a === undefined) return false;
+  return !range.err || range.err === 'line';
+}
+/* Take the spacing with it, the way the word diff does when you retype the sentence instead:
+   dropping two words out of the middle should not leave two spaces behind, and dropping them
+   off the end should not leave one hanging. */
+function deleteSpan(range){
+  var a = range.a, b = range.b, src = doc.src;
+  var m = /^\s+/.exec(src.slice(a, b)); if(m) a += m[0].length;
+  m = /\s+$/.exec(src.slice(a, b)); if(m) b -= m[0].length;
+  if(b <= a) return null;
+  if(src.charAt(b) === ' ') b++;
+  else if(src.charAt(a - 1) === ' ') a--;
+  return { a: a, b: b };
+}
 function canEditHere(range){
   if(!range || range.cell === undefined || range.cell < 0) return false;
   var c = doc.cells[range.cell];
@@ -2813,10 +2832,22 @@ function openPop(range, rect){
     '<div class="row"><button type="button" data-x="close">Cancel</button>' +
     '<button type="button" data-x="copy">Copy</button>' +
     (canEditHere(range) ? '<button type="button" data-x="edit">Edit</button>' : '') +
+    (canDeleteHere(range) ? '<button type="button" data-x="del">Delete</button>' : '') +
     (range.err ? '' : '<button type="button" class="go" data-x="comment">Comment</button>') +
     '</div>';
   placePop();
   pop.querySelector('[data-x="close"]').addEventListener('click', hidePop);
+  if(canDeleteHere(range)) pop.querySelector('[data-x="del"]').addEventListener('click', function(){
+    var span = deleteSpan(range);
+    if(!span){ hidePop(); return; }
+    var who = authorName(), gone = doc.src.slice(span.a, span.b);
+    hidePop();
+    var sel = window.getSelection();
+    if(sel && sel.removeAllRanges) sel.removeAllRanges();
+    editSource(span.a, span.b, '{--' + gone + '--}' + (who ? '{>>@' + who + '<<}' : ''));
+    maybeSignHint();
+    toast('Marked for deletion — ✕ on the row puts it back');
+  });
   if(canEditHere(range)) pop.querySelector('[data-x="edit"]').addEventListener('click', function(){
     var at = range.cell;
     hidePop();

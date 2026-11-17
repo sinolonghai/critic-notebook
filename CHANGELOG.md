@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Delete** joins Copy, Edit and Comment on the selection popover: it strikes the selected
+  words where they stand, as an ordinary tracked deletion. Dropping two words from a sentence
+  meant opening the block and retyping it, which is the long way round for the most common
+  edit there is. The spacing goes with them the way the word diff does it — a deletion from
+  the middle of a sentence takes the following space, one at the end takes the preceding one —
+  so accepting leaves one space rather than two and rejecting puts the words back exactly.
+  Offered wherever the offsets reach plain text, which is everywhere a comment can go, plus
+  across a line break, since a newline inside a deletion is how a whole block is removed.
+
 ## 0.5.0 — 2026-11-16
 
 Four things from an evening of real use, three of them about reading someone else's markup.
