@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.2 — 2026-11-17
+
+- The version stays in the status bar at every width, panel included. It was dropped below
+  880 on the grounds that it is the least useful thing on a truncated line, which is true
+  until the question you have at every republish is whether the page in front of you is the
+  one you just pushed.
+- Joining two blocks of the same kind asks with the question and nothing else — a title and
+  **Cancel** / **Join**. The paragraph under it was something more to read before clicking
+  the button you had already decided to click. The warning stays where there is something
+  to warn about.
+
 ## 0.7.1 — 2026-11-17
 
 - Joining asks first in every case, including two plain paragraphs where nothing can go

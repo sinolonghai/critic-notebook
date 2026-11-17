@@ -516,7 +516,6 @@ button,input,textarea{font:inherit;color:inherit}
   .status{padding:5px 10px;gap:8px;flex-wrap:nowrap}
   .status .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .status .mini{flex:0 0 auto}
-  .status .sver{display:none}      /* the first thing worth losing when the line truncates */
 }
 /* the panel case: the host owns the file, so the view switcher gets the room those
    buttons were using */
@@ -626,7 +625,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.7.1';
+var VERSION = '0.7.2';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -2734,10 +2733,11 @@ nb.addEventListener('click', function(ev){
       narrow: true,
       title: j.risk ? 'Join a ' + j.kinds.replace(' and ', ' to a ') + '?'
                     : 'Join these two ' + j.plural + '?',
-      body: (j.risk ? '<p class="hint">' + esc(j.risk) + '</p>' : '') +
-            '<p class="hint">' + (j.risk ? 'It is still one suggestion either way: rejecting'
-                                         : 'The break between them is struck out. Rejecting') +
-            ' it gives both blocks back exactly as they are now.</p>',
+      /* Where there is nothing to warn about, the title is the whole question and a
+         paragraph under it is just something else to read before clicking Join. */
+      body: j.risk ? '<p class="hint">' + esc(j.risk) + '</p>' +
+                     '<p class="hint">It is still one suggestion either way: rejecting it gives ' +
+                     'both blocks back exactly as they are now.</p>' : '',
       foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
             '<button type="button" class="btn primary" data-x="go">Join anyway</button>'
     });
