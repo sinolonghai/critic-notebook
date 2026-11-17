@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3 — 2026-11-17
+
+- A panel with nothing in its body is drawn as a question and two buttons, sized to what it
+  says. Given the full frame — a ruled header, a padded body holding nothing, a ruled footer
+  on its own ground — a one-line question read as a dialog box that had lost its contents.
+  The button under it says **Join**, not **Join anyway**, where there was nothing to warn
+  about for the *anyway* to refer to.
+
 ## 0.7.2 — 2026-11-17
 
 - The version stays in the status bar at every width, panel included. It was dropped below

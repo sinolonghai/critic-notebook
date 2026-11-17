@@ -452,6 +452,11 @@ button,input,textarea{font:inherit;color:inherit}
 .panel{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);width:min(680px,100%);
   max-height:min(84vh,720px);display:flex;flex-direction:column;overflow:hidden}
 .panel.narrow{width:min(430px,100%)}
+.panel.tight{width:auto;min-width:min(280px,100%);max-width:min(430px,100%)}
+.panel.tight .pbody{display:none}
+.panel.tight .phead{border-bottom:none;padding:15px 17px 3px}
+.panel.tight .phead b{font-size:14px}
+.panel.tight .pfoot{border-top:none;background:transparent;padding:11px 15px 13px}
 .phead{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--rule)}
 .phead b{font-size:13.5px;font-weight:600;flex:1}
 .pbody{padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0}
@@ -625,7 +630,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.7.2';
+var VERSION = '0.7.3';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -2739,7 +2744,8 @@ nb.addEventListener('click', function(ev){
                      '<p class="hint">It is still one suggestion either way: rejecting it gives ' +
                      'both blocks back exactly as they are now.</p>' : '',
       foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
-            '<button type="button" class="btn primary" data-x="go">Join anyway</button>'
+            '<button type="button" class="btn primary" data-x="go">' +
+              (j.risk ? 'Join anyway' : 'Join') + '</button>'
     });
     v.querySelector('[data-x="cancel"]').addEventListener('click', function(){ v.remove(); });
     v.querySelector('[data-x="go"]').addEventListener('click', function(){ v.remove(); joinBlocks(at); });
@@ -3905,7 +3911,13 @@ function openPanel(opts){
   var veil = document.createElement('div');
   veil.className = 'veil';
   veil.innerHTML =
-    '<div class="panel' + (opts.narrow ? ' narrow' : '') + '" role="dialog" aria-modal="true" aria-label="' + esc(opts.title) + '">' +
+    /* A panel whose body is empty is a question and two buttons. Given the full frame — a
+       ruled header, a padded body with nothing in it, a ruled footer on its own ground — it
+       reads as a dialog box that lost its contents. Drop the rules and the empty middle and
+       it is the size of what it says. */
+    '<div class="panel' + (opts.narrow ? ' narrow' : '') +
+      (String(opts.body || '').trim() ? '' : ' tight') +
+      '" role="dialog" aria-modal="true" aria-label="' + esc(opts.title) + '">' +
       '<div class="phead"><b>' + esc(opts.title) + '</b></div>' +
       '<div class="pbody">' + opts.body + '</div>' +
       '<div class="pfoot">' + opts.foot + '</div></div>';
