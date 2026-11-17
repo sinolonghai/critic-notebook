@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.7.0 — 2026-11-17
+
+- **Any two blocks can be joined**, and any block can be split. Joining was offered only
+  between two plain paragraphs, which is the one case where nothing can go wrong — and the
+  reason the control was missing from whole documents, the tutorial included, where every
+  paragraph sits beside a heading, a list or a table. The mark round-trips whatever is on
+  either side of it; what differs is how Markdown then reads the result, and that is worth
+  saying rather than deciding for someone. So the join happens, and where the result will not
+  read the way it looks, a panel says what will happen first: a heading ends at its own line
+  and will not merge; a table run on to the paragraph above loses its columns; text run on to
+  a quotation is swallowed by it. Two plain paragraphs still join on one click.
+- A blank line typed into a table, a list or a quotation warns under the text as you type it.
+  The warning is there rather than in a dialog on the way out because committing happens
+  whenever you click away, save, switch file or accept everything, and a modal that can fire
+  at any of those moments is worse than the mistake it prevents. It arrives while there is
+  still a cursor in the box.
+- The controls between blocks are drawn like the ✓ and ✕ on a suggestion row — same size,
+  same border, no fading — since they are read in the same glance and do the same kind of
+  thing. Hovering colours them the way the row buttons are coloured: adding is green, taking
+  away is red.
+- **The version is in the status bar**, where it can be read without opening a pane. It was
+  only in the documents pane's footer, which is shut in a panel and shut whenever anyone has
+  folded it, and "is this the latest?" is a question that comes up at every republish.
+- The tutorial gained a second paragraph, because it did not have two adjacent ones anywhere
+  and so could never show a join at all. It now says what the **+** and **−** do and points at
+  the pair to try them on.
+
 ## 0.6.1 — 2026-11-17
 
 Both halves of why nobody found **join** the first time it existed.

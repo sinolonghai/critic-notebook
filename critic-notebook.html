@@ -101,6 +101,8 @@ button,input,textarea{font:inherit;color:inherit}
 .status{background:var(--surface-2);border-bottom:1px solid var(--rule);flex:0 0 auto;
   padding:6px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;z-index:7}
 .status .txt{color:var(--ink-soft);font-variant-numeric:tabular-nums;flex:1 1 auto}
+.status .sver{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+  letter-spacing:.02em;user-select:all}
 .status .mini{display:flex;gap:5px}
 .status .mini button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:5px;
   padding:3px 9px;font-size:11.5px;cursor:pointer;white-space:nowrap}
@@ -224,17 +226,19 @@ button,input,textarea{font:inherit;color:inherit}
   cursor:pointer;white-space:nowrap}
 .start button:hover{background:var(--accent-soft)}
 
-/* These stay on screen. They were drawn only on hover, which kept the margin quiet and
-   meant nobody found them: a control between two paragraphs is exactly the one you have to
-   know is there before you would think to look. Small, faint and paired instead — + makes a
-   paragraph here, − takes the break out between these two — so the pair explains itself. */
-.gap{height:18px;position:relative;display:flex;align-items:center;justify-content:center;gap:5px}
-.gap button{opacity:.34;transition:opacity .12s,color .12s,border-color .12s;border:1px solid var(--rule-strong);
-  background:var(--paper);color:var(--ink-faint);border-radius:999px;font-size:11px;line-height:1;
-  width:17px;height:17px;padding:0;cursor:pointer;font-family:var(--mono);display:flex;
-  align-items:center;justify-content:center}
-.gap:hover button{opacity:.8}
-.gap button:hover,.gap button:focus-visible{opacity:1;color:var(--ink);border-color:var(--ink-faint)}
+/* These stay on screen, and are drawn like the ✓ and ✕ on a suggestion row, because they
+   do the same kind of thing and are read in the same glance. They were on hover and then
+   faint, and neither was findable: a control between two paragraphs is exactly the one you
+   have to know is there before you would think to look for it. Paired, so the two explain
+   each other — + makes a paragraph here, − takes the break out between these two — and
+   coloured on hover the way the row buttons are: adding is green, taking away is red. */
+.gap{height:22px;position:relative;display:flex;align-items:center;justify-content:center;gap:4px}
+.gap button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:5px;
+  width:24px;height:20px;font-size:12px;line-height:1;padding:0;cursor:pointer;
+  color:var(--ink-faint);font-family:var(--mono);display:flex;align-items:center;justify-content:center;
+  transition:color .12s,border-color .12s,background .12s}
+.gap button[data-ins]:hover,.gap button[data-ins]:focus-visible{border-color:var(--ins);color:var(--ins);background:var(--ins-bg)}
+.gap button[data-join]:hover,.gap button[data-join]:focus-visible{border-color:var(--del);color:var(--del);background:var(--del-bg)}
 .gap::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--rule);opacity:0;transition:opacity .12s}
 .gap:hover::before{opacity:1}
 
@@ -356,6 +360,8 @@ button,input,textarea{font:inherit;color:inherit}
 .mk .txt .now{color:var(--ins)}
 .mk .txt .arrow{color:var(--ink-faint);font-family:var(--mono);font-size:11px;margin:0 5px}
 .mk .txt .quote{color:var(--ink-soft)}
+.ed .prev .warn{margin:0 0 7px;font-family:var(--ui);font-size:12px;line-height:1.5;color:var(--del);
+  background:var(--del-bg);border:1px solid var(--del-line);border-radius:6px;padding:6px 9px}
 .mk .note{display:block;margin-top:4px;font-family:var(--ui);font-size:12px;line-height:1.5;
   text-align:left;border:1px solid transparent;border-radius:5px;margin-left:-4px;padding:1px 4px;
   cursor:text;background:transparent;color:inherit;width:calc(100% + 8px)}
@@ -483,10 +489,7 @@ button,input,textarea{font:inherit;color:inherit}
 /* A pointer that cannot hover never reveals the insert button, so it stays out. Width was
    standing in for this and got it wrong in a side panel, where there is a mouse and every
    gap between blocks carried a dashed button nobody was reaching for. */
-/* no hover to reveal anything with, so they sit at full strength */
-@media (hover:none){
-  .gap button{opacity:.75}
-}
+
 /* ---------- narrow: a side panel, where vertical space is the scarce thing ----------
    Nothing overflows at 420 pixels — the bar wraps instead, into four rows, and with the
    status line and the lead text that is half the panel gone before the document starts.
@@ -513,6 +516,7 @@ button,input,textarea{font:inherit;color:inherit}
   .status{padding:5px 10px;gap:8px;flex-wrap:nowrap}
   .status .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .status .mini{flex:0 0 auto}
+  .status .sver{display:none}      /* the first thing worth losing when the line truncates */
 }
 /* the panel case: the host owns the file, so the view switcher gets the room those
    buttons were using */
@@ -570,6 +574,7 @@ button,input,textarea{font:inherit;color:inherit}
 
   <div class="status">
     <span class="txt" id="stxt"></span>
+    <span class="sver" id="sver" title="The version of this page"></span>
     <span class="mini">
       <button type="button" id="btn-all-yes">Accept all</button>
       <button type="button" id="btn-all-no">Reject all</button>
@@ -621,7 +626,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.6.1';
+var VERSION = '0.7.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -644,9 +649,14 @@ var SAMPLE = [
 'changed is worked out by {~~comparison~>a word-level diff~~}{>>@dana: "diff" is clearer<<} and',
 'recorded as a tracked suggestion. Opening another block commits the one you were in.',
 '',
+'Between any two blocks sits a small `+`, and where both of them are plain paragraphs a `−`',
+'as well. The first adds a paragraph there; the second proposes joining the two into one. This',
+'paragraph and the one above it are a pair to try it on — the `−` between them is the only one',
+'in this document, because every other block here is a heading, a list, a table or code.',
+'',
 '- Click a block, change a word, then click away',
 '- Select a phrase to leave a comment {==on that exact phrase==}{>>@dana: like this one<<}',
-'- {++Hover between two blocks for "+ new block"++}{>>@dana: added while writing this<<}',
+'- {++Use the + between two blocks to add a paragraph++}{>>@dana: added while writing this<<}',
 '- Press Esc while editing to throw the edit away',
 '',
 '## The five marks',
@@ -1662,11 +1672,38 @@ function commitNoteEdit(){
 
    Only two plain paragraphs with nothing but whitespace between them. Anything else in that
    gap is a mark, and a mark inside a mark does not survive the parser. */
+var KINDNAME = { para:'paragraph', heading:'heading', list:'list', table:'table',
+                 code:'code block', quote:'quotation', hr:'rule' };
+function kindName(k){ return KINDNAME[k] || 'block'; }
+/* Joining is always allowed, because the mark round-trips whatever sits on either side of
+   it: reject gives both blocks back, accept gives the file with one newline where two were.
+   What differs is how Markdown then reads the result, and that is worth saying out loud
+   rather than deciding for someone — the blocks a document wants joined are not always two
+   plain paragraphs, and refusing outright left the control missing from whole documents. */
+function joinRisk(A, B){
+  if(A.kind === 'para' && B.kind === 'para') return null;
+  if(A.kind === 'heading')
+    return 'A heading ends at its own line, so this will not actually merge anything — the ' +
+           kindName(B.kind) + ' below it stays a block of its own.';
+  if(A.kind === B.kind) return null;      /* two lists, two quotations, two tables: these merge */
+  if(B.kind === 'table')
+    return 'A table has to begin after a blank line. Run on to the ' + kindName(A.kind) +
+           ' above it, its rows are read as ordinary text and the table is lost.';
+  if(A.kind === 'code' || B.kind === 'code')
+    return 'A fenced block has to start and end on lines of its own. Joining it to the ' +
+           kindName(A.kind === 'code' ? B.kind : A.kind) + ' beside it will change where the fence is read.';
+  if(A.kind === 'quote')
+    return 'Text run on to a quotation is swallowed by it: the ' + kindName(B.kind) +
+           ' below will be quoted too.';
+  if(A.kind === 'list')
+    return 'Run on to a list, the ' + kindName(B.kind) + ' below becomes part of its last item.';
+  return 'These are different kinds of block — a ' + kindName(A.kind) + ' and a ' +
+         kindName(B.kind) + '. Joining them changes how the document reads.';
+}
 function joinable(k){
   var cells = doc.cells;
   if(k <= 0 || k >= cells.length) return null;
   var A = cells[k-1], B = cells[k];
-  if(A.kind !== 'para' || B.kind !== 'para') return null;
   /* Only the whitespace at the end of the gap has to be plain, not the whole of it: a comment
      left on the end of a paragraph sits in the gap too, and refusing to join under one would
      rule out most of a document that has already been reviewed. The mark goes around the
@@ -1674,7 +1711,8 @@ function joinable(k){
   var gap = doc.src.slice(A.b, B.a);
   var run = /[\n \t]+$/.exec(gap);
   if(!run || (run[0].match(/\n/g) || []).length < 2) return null;
-  return { a: A.b + run.index, b: B.a, gap: run[0] };
+  return { a: A.b + run.index, b: B.a, gap: run[0], risk: joinRisk(A, B),
+           kinds: kindName(A.kind) + ' and ' + kindName(B.kind) };
 }
 function joinBlocks(k){
   var j = joinable(k);
@@ -1714,9 +1752,34 @@ function editorHtml(kind, idx){
     '<div class="prev">' + previewHtml(kind, idx) + '</div></div>';
 }
 
+/* Typing a blank line into a block splits it, which is how you split a paragraph on purpose
+   and also how you destroy a table by accident. The warning goes here, live under the text
+   you are typing, rather than in a dialog on the way out: committing happens whenever you
+   click away, save, switch file or accept everything, and a modal that can fire at any of
+   those moments is worse than the mistake it prevents. Here it arrives while there is still
+   a cursor in the box. */
+function splitWarning(kind, idx){
+  if(kind !== 'cell') return '';
+  var c = doc.cells[idx];
+  if(!c || c.kind === 'para') return '';
+  var blank = /\n[ \t]*\n/;
+  if(!blank.test(draft) || blank.test(draftBase)) return '';
+  var why = c.kind === 'table'
+      ? 'A blank line ends a table. The rows below it will be read as ordinary text, and the columns are gone.'
+    : c.kind === 'list'
+      ? 'A blank line here breaks the list in two.'
+    : c.kind === 'quote'
+      ? 'A blank line ends the quotation. What follows it will no longer be quoted.'
+    : c.kind === 'heading'
+      ? 'A heading is one line; everything after the blank line becomes a paragraph below it.'
+      : 'A blank line splits this block in two.';
+  return '<p class="warn">' + esc(why) + ' Committing is still a suggestion \u2014 rejecting it ' +
+         'puts the block back as it was.</p>';
+}
 function previewHtml(kind, idx){
-  var lab = '<div class="lab">recorded as</div>';
+  var lab = '<div class="lab">recorded as</div>' + splitWarning(kind, idx);
   if(tidy(draft) === tidy(draftBase)) return lab + '<p class="none">No change yet. Just edit the text above.</p>';
+  if(kind === 'cell' && !doc.cells[idx]) return lab;
   if(kind === 'new'){
     var body = tidy(draft);
     if(!body) return lab + '<p class="none">Nothing to add yet.</p>';
@@ -1992,6 +2055,10 @@ function paintStatus(){
     (figureCount() ? ' (' + figureCount() + ' changing a figure)' : '') + ' · ' +
     doc.cells.length + ' blocks' +
     ' · ' + wordCount(body) + ' words ' + label;
+  /* Which version is this? It was only in the documents pane's footer, which is shut in a
+     panel and shut whenever anyone has folded it, and the question comes up every time the
+     page is republished. */
+  document.getElementById('sver').textContent = 'v' + VERSION;
   paintStart();
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
   document.getElementById('btn-undo').disabled = history.length === 0;
@@ -2654,7 +2721,24 @@ nb.addEventListener('click', function(ev){
   if(fl){ showMarkedUp(+fl.dataset.flag); return; }
 
   var jn = ev.target.closest('button[data-join]');
-  if(jn){ flushEditor(); joinBlocks(+jn.dataset.join); return; }
+  if(jn){
+    flushEditor();
+    var at = +jn.dataset.join, j = joinable(at);
+    if(!j) return;
+    if(!j.risk){ joinBlocks(at); return; }
+    var v = openPanel({
+      narrow: true,
+      title: 'Join a ' + j.kinds.replace(' and ', ' to a ') + '?',
+      body: '<p class="hint">' + esc(j.risk) + '</p>' +
+            '<p class="hint">It is still one suggestion either way: rejecting it gives both ' +
+            'blocks back exactly as they are now.</p>',
+      foot: '<button type="button" class="btn" data-x="cancel">Cancel</button>' +
+            '<button type="button" class="btn primary" data-x="go">Join anyway</button>'
+    });
+    v.querySelector('[data-x="cancel"]').addEventListener('click', function(){ v.remove(); });
+    v.querySelector('[data-x="go"]').addEventListener('click', function(){ v.remove(); joinBlocks(at); });
+    return;
+  }
 
   var ins = ev.target.closest('button[data-ins]');
   if(ins){ openInsert(+ins.dataset.ins); return; }
