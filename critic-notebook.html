@@ -630,7 +630,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.8.0';
+var VERSION = '0.8.1';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1481,7 +1481,29 @@ function localOf(mk){
   var id = mk.attached ? mk.parent : mk.id;
   return (id in localIdx) ? localIdx[id] : -1;
 }
-function hueOf(name){ var h = 0; for(var i = 0; i < name.length; i++) h = (h*31 + name.charCodeAt(i)) % 360; return h; }
+/* A hue per author, spaced across the circle rather than hashed onto it. Hashing gave two
+   reviewers of one document 96° and 117° — both green, which is no answer to "who wrote
+   this". The names present in the document are sorted and dealt hues evenly, so two are
+   always opposite and three are a third of the circle apart; the starting point comes from
+   the first name, so two documents with different reviewers do not open the same colours.
+   A name's colour can move when another reviewer joins the document, which is the price:
+   telling people apart inside one document is the thing the colour is for. */
+function hashOf(name){ var h = 0; for(var i = 0; i < name.length; i++) h = (h*31 + name.charCodeAt(i)) % 360; return h; }
+var hueCache = { key: null, map: {} };
+function hueOf(name){
+  var all = [];
+  doc.marks.forEach(function(m){ if(m.who && all.indexOf(m.who) < 0) all.push(m.who); });
+  var me = authorName();
+  if(me && all.indexOf(me) < 0) all.push(me);
+  all.sort();
+  var key = all.join('\u0000');
+  if(hueCache.key !== key){
+    var base = all.length ? hashOf(all[0]) : 0, map = {};
+    all.forEach(function(n, i){ map[n] = Math.round(base + i * 360 / all.length) % 360; });
+    hueCache = { key: key, map: map };
+  }
+  return hueCache.map[name] === undefined ? hashOf(name) : hueCache.map[name];
+}
 function authorName(){ return document.getElementById('author').value.trim().replace(/[：:@\s]/g, ''); }
 function openCount(){ return doc.marks.filter(function(m){ return !m.attached; }).length; }
 function isDirty(){ return doc.src !== savedSrc; }
@@ -1607,12 +1629,14 @@ function markRow(mk, mi){
   } else if(mk.note || mk.t === 'com'){
     var body = mk.t === 'com' ? (mk.body || '') : mk.note;
     txt += '<span class="note" data-note="' + mi + '" role="button" tabindex="0" title="Click to edit this comment">' +
-      (mk.who ? '<span class="by">@' + esc(mk.who) + '</span>' : '') +
       (body ? esc(body) : '<i class="nobody">empty comment</i>') +
       '<span class="pen" aria-hidden="true">✎</span></span>';
   }
 
-  var who = (mk.who && !mk.note && mk.t !== 'com')
+  /* always in the same place. It used to move into the note when there was one, so the right
+     edge of the rows — the one column you can run an eye down — was blank for exactly the
+     suggestions that had most to say. */
+  var who = mk.who
     ? '<span class="who"><span class="dot" style="background:hsl(' + hueOf(mk.who) + ' 52% 48%)"></span>@' + esc(mk.who) + '</span>' : '';
   var ops = editing ? '' : (single
     ? who + '<button type="button" class="y" data-act="accept" data-mi="' + mi + '" title="Resolve" aria-label="Resolve">✓</button>'

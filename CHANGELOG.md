@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.1 — 2026-11-17
+
+Two things wrong with telling one reviewer from another, found by putting two of them in one
+document and looking at it.
+
+- Each author's colour is dealt from the circle rather than hashed onto it. Hashing gave the
+  two reviewers of one document 96° and 117° — both green, which is no answer to "who wrote
+  this". The names in the document are sorted and spaced evenly instead, so two are opposite
+  and three a third of the circle apart, with the starting point taken from the first name so
+  that different documents do not all open the same colours. A name's colour can move when
+  another reviewer joins the document; telling people apart inside one document is what the
+  colour is for.
+- The author is in the same place on every row. It moved into the note when a suggestion had
+  one, so the right edge of the rows — the one column an eye can run down — was blank for
+  exactly the suggestions that had most to say.
+
 ## 0.8.0 — 2026-11-17
 
 - `test/browser.test.mjs` — the checks that need a real browser, kept rather than thrown away.
