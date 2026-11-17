@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.10.0 — 2026-11-17
+
+- **The Compare picker lists the open file's git history** when the folder you opened is the top
+  of a repository: every commit that changed it, newest first, as `date · message · hash`.
+  Choosing one compares against that version, and **Open as suggestions** works from there as it
+  does for any file. The newest is called *last commit*, so comparing against it shows what has
+  changed since you last committed. Until now this took `node tools/history.mjs` in a terminal,
+  and the people this tool is for are the ones a terminal step loses.
+- The page reads the repository itself, with no git installed, and only ever reads — no object
+  written, no ref moved, nothing locked. It follows the first-parent line, the commits
+  `git log --first-parent -- <file>` lists, and does not follow renames.
+- A reader that understood only loose objects would work on a fresh repository and go quietly
+  blind the first time git packed it, which git does by itself. So packs are read from the
+  start: the version-2 index, every entry type, deltas named by distance and by hash, chains of
+  them as deep as git builds. The browser's decompressor cannot say where a zlib stream ends, so
+  each pack entry is cut out exactly, at the offset where the index says the next one begins.
+- What it does not understand it refuses out loud rather than reads wrongly: a SHA-256
+  repository, the index format git stopped writing in 2008, a folder that is a worktree or a
+  submodule and keeps its history somewhere else. A folder inside a repository but below its
+  top cannot reach the `.git` above it, and the picker says so instead of showing nothing.
+- `test/git.test.mjs` reads every object in a repository twice — with the page's reader and with
+  `git cat-file` — and compares them byte for byte, then compares the history of every file with
+  `git log --first-parent`. On this repository: 385 objects, 274 loose and 111 packed, all
+  identical; 21 files, every history matching. `--fixtures` builds four more repositories —
+  loose, packed with each kind of delta, and mixed — with delta chains thirty-six deep, which a
+  small project's own history never has. A `git-history` browser scenario reads a real
+  repository through the page's handle API and checks what it chose against `git show`.
+- `tools/history.mjs` stays, for a browser without folder access or a folder below the top of a
+  repository. The To do list is empty but for the idea that was turned down.
+
 ## 0.9.1 — 2026-11-17
 
 Two reviewers in turn — one marks a document up, the next opens it and keeps going — worked,

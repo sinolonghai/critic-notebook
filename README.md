@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.9.1** · [changelog](CHANGELOG.md)
+**0.10.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -129,6 +129,7 @@ node test/review.test.mjs      # unit: the cases that have broken before
 node test/documents.test.mjs   # whole documents end to end
 node test/blackline.test.mjs   # a comparison written out, and read back as both versions
 node test/merge.test.mjs       # two reviews laid over one original
+node test/git.test.mjs         # the git reader, object by object against git itself
 node test/browser.test.mjs     # the interface, in a real browser — needs Playwright
 ```
 
@@ -329,7 +330,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.9.1' }
+page → host   { type: 'ready', protocol: 1, version: '0.10.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -477,7 +478,25 @@ Blocks that were rewritten rather than replaced are recognised by word overlap, 
 one change instead of a deletion next to an unrelated insertion. Runs of untouched blocks
 collapse to a single line.
 
-To compare against git history, export the versions as files first:
+**Git history** is in the same picker. When the folder you opened is the top of a git
+repository, the picker lists every commit that changed the open file, newest first —
+`2026-11-17 · Keep the name on a mark… · a3dada4` — and choosing one compares against that
+version. The newest is called *last commit*, so comparing against it shows what you have changed
+since you last committed. From there, **Open as suggestions** works as it does for any file.
+
+The page reads the repository itself, with no git installed and no terminal step, and only ever
+reads: no object is written, no ref is moved, nothing is locked. It follows the first-parent
+line, which is what `git log --first-parent -- <file>` lists, and does not follow renames. A
+reader that understood only loose objects would work on a fresh repository and go quietly blind
+the first time git packed it, so packs are read from the start — the version-2 index, every
+entry type, deltas named by offset and by hash, and chains of them as deep as git builds. What
+it does not understand it says so about rather than read wrongly: a SHA-256 repository, an index
+format git stopped writing in 2008, a folder that is a worktree or a submodule and keeps its
+history elsewhere. A folder that is *inside* a repository but not its top cannot reach the
+`.git` above it — a page is given the folder it is given — and the picker says that too.
+
+`tools/history.mjs` still writes past versions out as files, for a browser without folder
+access or a folder below the top of the repository:
 
 ```sh
 node tools/history.mjs README.md        # last 10 versions
@@ -486,9 +505,7 @@ node tools/history.mjs --all            # every tracked .md
 ```
 
 They land in `history/<name>/<date>-<sha>.md`, which is gitignored and shows up in the tree on
-the left like any other folder. Git stays in git's hands: a web page has no business parsing
-packfiles, and a reader that handled only loose objects would work on a fresh repo and quietly
-stop after the first `git gc`.
+the left like any other folder.
 
 **Merge reviews…** is the other thing two files can be to each other. Where a blackline is one
 version against a later one, a merge is two people who reviewed the *same* document apart from
@@ -564,6 +581,21 @@ and you have the older version, accept everything and you have the newer — on 
 have broken: additions and removals at the top, the middle and the end, runs of both at once,
 lists, tables and fences, documents entirely new or entirely gone, and the one shape the format
 cannot take.
+
+### The git reader
+
+```sh
+node test/git.test.mjs                  # this repository
+node test/git.test.mjs --fixtures       # four built ones: loose, packed two ways, and mixed
+node test/git.test.mjs path/to/repo     # any other
+```
+
+The page reads git without git, so the only honest test is to ask git. Every object in the
+repository is read twice — by the page's reader and by `git cat-file` — and compared byte for
+byte; then the history of every file the first-parent line has touched is compared with what
+`git log --first-parent` says. `--fixtures` builds repositories in every state a real one is
+found in, including delta chains thirty-odd deep, which a fresh clone of a small project never
+has. Needs git on the path, and skips with a note when there is none.
 
 ### The browser suite
 
@@ -662,13 +694,11 @@ starts over.
 
 ## To do
 
-Roughly in the order they would be worth doing. Each note says what makes it hard, because
-that is the part that gets forgotten.
-
-**Read git directly.** It would remove `tools/history.mjs`, since the page already holds a
-handle on the repository and browsers now decompress zlib natively. Loose objects are easy;
-packfiles are not, and a reader that handled only loose objects would work on a fresh repo and
-quietly stop after the first `git gc` — which is worse than not having it.
+Nothing is planned at the moment. Everything this list once held has been built — the panel
+mode, the blackline, taking changes across versions, merging two reviews, the browser suite,
+reading git — and the CHANGELOG says what each one turned out to need. What is left is the one
+idea that was turned down, kept because a list that records what was refused, and why, is more
+use than one that quietly drops it.
 
 **AI assistance in the editor — decided against,** and kept here because a list that records
 what was turned down is more use than one that quietly drops it.

@@ -23,7 +23,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -65,9 +65,11 @@ function instrumented(){
     get d(){ return doc; }, set d(v){ doc = v; },
     setCompare:function(c){ compareWith = c; render(); },
     useFiles:function(l){ files = l; folder = { handle:{name:'f'}, name:'f', abs:'/f' }; paintDocList(); },
+    useFolder:function(h){ folder = { handle:h, name:h.name, abs:'/' + h.name }; },
     docs:function(){ return docs.map(function(d){ return {
       key:d.key, name:d.name, src:d.src, from:!!d.from, scratch:!!d.scratch, handle:!!d.handle }; }); },
     active:function(){ return activeDoc; },
+    compareWith:function(){ return compareWith; },
     src:function(){ return doc.src; },
     groups:function(){ return [].slice.call(document.querySelectorAll('#doclist .grp'))
       .map(function(g){ return g.textContent; }); }
@@ -513,6 +515,99 @@ scenario('merge', async (browser) => {
     return window.__T.resolveRange(0, s.length, 'orig') === o;
   }, O).catch(() => null);
   if(back !== null) ok(back, 'rejecting every suggestion gives the document both started from');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close();
+});
+
+/* The history of the open file, read out of the repository by the page itself. The folder
+   handle is a stand-in whose files are a real repository on disk — built by the same script
+   the git suite uses, packs and loose objects both — so what is under test is the page's own
+   reading through the handle API, and what it chose is checked against git. */
+scenario('git-history', async (browser) => {
+  let gitOk = true;
+  try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { gitOk = false; }
+  if(!gitOk){ console.log('  (git is not installed; skipped)'); return; }
+  const repo = path.join(TMP, 'repo');
+  execFileSync('bash', [path.join(HERE, 'git-fixtures.sh'), repo, 'mixed'], { stdio: 'ignore' });
+  const gitDir = path.join(repo, '.git');
+  const g = args => execFileSync('git', ['-C', repo, ...args]).toString();
+
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.exposeFunction('__gitKind', rel => {
+    try { return fs.statSync(path.join(gitDir, rel)).isDirectory() ? 'dir' : 'file'; } catch { return null; }
+  });
+  await p.exposeFunction('__gitRead', rel => {
+    try { return fs.readFileSync(path.join(gitDir, rel)).toString('base64'); } catch { return null; }
+  });
+  await p.exposeFunction('__gitList', rel => {
+    try { return fs.readdirSync(path.join(gitDir, rel)); } catch { return null; }
+  });
+  await p.goto(instrumented()); await sleep(900);
+
+  const notes = fs.readFileSync(path.join(repo, 'notes.md'), 'utf8');
+  await p.evaluate(text => {
+    const nf = () => Promise.reject(Object.assign(new Error('not found'), { name: 'NotFoundError' }));
+    const join = (a, b) => a ? a + '/' + b : b;
+    const fileH = rel => ({ kind: 'file', name: rel.split('/').pop(),
+      getFile: () => window.__gitRead(rel).then(b64 => {
+        const bin = atob(b64), u = new Uint8Array(bin.length);
+        for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        return new File([u], rel.split('/').pop());
+      }) });
+    const dirH = rel => ({ kind: 'directory', name: rel.split('/').pop() || '.git',
+      getDirectoryHandle: n => window.__gitKind(join(rel, n)).then(k => k === 'dir' ? dirH(join(rel, n)) : nf()),
+      getFileHandle: n => window.__gitKind(join(rel, n)).then(k => k === 'file' ? fileH(join(rel, n)) : nf()),
+      keys: () => { let names = null, i = 0;
+        return { next: async () => { if(!names) names = (await window.__gitList(rel)) || [];
+          return i < names.length ? { done: false, value: names[i++] } : { done: true }; } }; } });
+    /* the folder that was opened: it holds .git, and nothing about it is real but the repository */
+    const root = { kind: 'directory', name: 'repo',
+      getDirectoryHandle: n => n === '.git' ? Promise.resolve(dirH('')) : nf(),
+      getFileHandle: () => nf() };
+    window.__T.useFolder(root);
+    window.__T.openDoc(text, 'notes.md', null, 'notes.md', 'repo/notes.md');
+    window.__T.setView('compare');
+  }, notes);
+
+  /* reading happens in the background; wait for the picker to fill */
+  let opts = [];
+  for(let t = 0; t < 40; t++){
+    opts = await p.evaluate(() => [].slice.call(document.querySelectorAll('#cmppick option'))
+      .map(o => ({ v: o.value, t: o.textContent, d: o.disabled })));
+    if(opts.some(o => /^git:/.test(o.v)) || opts.some(o => o.d && !/reading/.test(o.t))) break;
+    await sleep(150);
+  }
+  const versions = opts.filter(o => /^git:/.test(o.v));
+  const want = g(['log', '--first-parent', '--format=%H', '--', 'notes.md']).trim().split('\n').slice(0, 40);
+  ok(versions.length === want.length, 'the picker lists every commit that changed the file — ' +
+     versions.length + ' of ' + want.length + (versions.length ? '' : ' ' + JSON.stringify(opts.map(o => o.t))));
+  ok(versions.length && versions[0].v === 'git:' + want[0], 'newest first, the same commits git names');
+  ok(versions.length && /^last commit/.test(versions[0].t), 'the newest is called the last commit');
+
+  /* choose the oldest and compare against what git says that version was */
+  const oldest = versions[versions.length - 1];
+  await p.selectOption('#cmppick', oldest.v); await sleep(800);
+  const got = await p.evaluate(() => (window.__T.compareWith() || {}).src || null);
+  const sha = oldest.v.slice(4);
+  ok(got === g(['show', sha + ':notes.md']), 'choosing a version compares against exactly what git holds for it');
+  ok(await p.evaluate(() => document.querySelectorAll('.cmp:not(.same)').length > 0),
+     'and the Compare view shows what changed since');
+  if(process.env.CN_SHOT) await p.screenshot({ path: process.env.CN_SHOT, clip: { x: 0, y: 60, width: 1280, height: 420 } });
+
+  /* a folder that is not the top of a repository says so rather than showing nothing */
+  await p.evaluate(() => {
+    window.__T.useFolder({ kind: 'directory', name: 'plain',
+      getDirectoryHandle: () => Promise.reject(Object.assign(new Error(''), { name: 'NotFoundError' })),
+      getFileHandle: () => Promise.reject(Object.assign(new Error(''), { name: 'NotFoundError' })) });
+    window.__T.setView('markup'); window.__T.setView('compare');
+  });
+  await sleep(600);
+  const said = await p.evaluate(() => [].slice.call(document.querySelectorAll('#cmppick option[disabled]'))
+    .map(o => o.textContent).join(' | '));
+  ok(/not the top of a git repository/.test(said), 'a folder that is not a repository says so — ' + said);
 
   ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();

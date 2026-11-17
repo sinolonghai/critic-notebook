@@ -635,7 +635,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.9.1';
+var VERSION = '0.10.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1894,6 +1894,390 @@ function joinBlocks(k){
   toast('Joined \u2014 \u2715 on the row puts the break back');
 }
 
+/* ===================== git, read-only ===================== */
+/* The history of the file in front of you, read straight out of the repository the folder
+   you opened already is. Until now that took a terminal — `node tools/history.mjs` to write
+   past versions out as files — and this tool is meant for people for whom a terminal step is
+   the step where they stop.
+
+   Read-only, and nothing but reading: no object is ever written, no ref moved, no lock taken.
+   Committing from a web page is a different and much more dangerous thing, and not this.
+
+   A reader that understood only loose objects would work on a fresh repository and then go
+   quietly blind the first time git packed it, which git does by itself. So packs are read
+   from the start: the version-2 index, every entry type, both ways a delta can name its base,
+   and delta chains as deep as git builds them. Each piece is checked against git itself in
+   test/git.test.mjs, object by object. What is not understood is refused out loud — a
+   SHA-256 repository, the pre-2008 index format, a `.git` that is a pointer to somewhere
+   else — rather than read wrongly. */
+var GIT_TYPES = { 1: 'commit', 2: 'tree', 3: 'blob', 4: 'tag' };
+var UTF8 = new TextDecoder('utf-8');
+
+function gitError(msg, extra){ var e = new Error(msg); if(extra) for(var k in extra) e[k] = extra[k]; return e; }
+function hexOf(b, at, n){
+  var s = '';
+  for(var i = 0; i < n; i++){ var x = b[at + i]; s += (x < 16 ? '0' : '') + x.toString(16); }
+  return s;
+}
+function u32(b, at){ return b[at] * 16777216 + (b[at+1] << 16) + (b[at+2] << 8) + b[at+3]; }
+
+/* zlib through the browser's own decompressor. It cannot say where a stream ended, which is
+   why pack entries are cut out exactly before they get here (see nextOffset). */
+function gitInflate(bytes){
+  var rs = new ReadableStream({ start: function(c){ c.enqueue(bytes); c.close(); } });
+  var rd = rs.pipeThrough(new DecompressionStream('deflate')).getReader();
+  var parts = [], total = 0;
+  function pump(){
+    return rd.read().then(function(r){
+      if(r.done){
+        var out = new Uint8Array(total), o = 0;
+        parts.forEach(function(p){ out.set(p, o); o += p.length; });
+        return out;
+      }
+      parts.push(r.value); total += r.value.length;
+      return pump();
+    });
+  }
+  return pump();
+}
+
+/* A delta is a list of instructions against a base: copy this range of it, or insert these
+   bytes. Both sizes are checked, because a delta applied to the wrong base produces text that
+   looks plausible and is wrong. */
+function applyDelta(base, delta){
+  var i = 0;
+  function varint(){
+    var r = 0, s = 1, c;
+    do { c = delta[i++]; r += (c & 0x7f) * s; s *= 128; } while(c & 0x80);
+    return r;
+  }
+  var srcSize = varint(), dstSize = varint();
+  if(srcSize !== base.length)
+    throw gitError('a delta expects a base of ' + srcSize + ' bytes and was given ' + base.length);
+  var out = new Uint8Array(dstSize), o = 0;
+  while(i < delta.length){
+    var op = delta[i++];
+    if(op & 0x80){
+      var off = 0, len = 0;
+      if(op & 1)  off += delta[i++];
+      if(op & 2)  off += delta[i++] * 256;
+      if(op & 4)  off += delta[i++] * 65536;
+      if(op & 8)  off += delta[i++] * 16777216;
+      if(op & 16) len += delta[i++];
+      if(op & 32) len += delta[i++] * 256;
+      if(op & 64) len += delta[i++] * 65536;
+      if(len === 0) len = 0x10000;
+      if(off + len > base.length) throw gitError('a delta copies past the end of its base');
+      out.set(base.subarray(off, off + len), o); o += len;
+    } else if(op){
+      out.set(delta.subarray(i, i + op), o); o += op; i += op;
+    } else throw gitError('delta opcode 0 is reserved');
+  }
+  if(o !== dstSize) throw gitError('a delta produced ' + o + ' bytes where it promised ' + dstSize);
+  return out;
+}
+
+/* `io` is the repository's .git directory, as four questions: read a file, read part of one,
+   how big is it, what is in this directory. The page answers them from the folder handle it
+   already holds; the test answers them from disk. Nothing else about the outside world is
+   assumed, which is what lets the same code be checked against git in node. */
+function gitRepo(io){
+  var cache = new Map(), packs = null;
+
+  function text(p){ return io.read(p).then(function(b){ return b ? UTF8.decode(b) : null; }); }
+
+  function loadPacks(){
+    if(packs) return packs;
+    packs = io.list('objects/pack').then(function(names){
+      return Promise.all((names || []).filter(function(n){ return /\.idx$/.test(n); }).map(loadIdx));
+    }).then(function(list){ return list.filter(Boolean); });
+    return packs;
+  }
+  function loadIdx(name){
+    var pack = 'objects/pack/' + name.replace(/\.idx$/, '.pack');
+    return io.read('objects/pack/' + name).then(function(b){
+      if(!b) return null;
+      if(!(b[0] === 0xff && b[1] === 0x74 && b[2] === 0x4f && b[3] === 0x63))
+        throw gitError('this repository has a pack index in the format git stopped writing in 2008');
+      if(u32(b, 4) !== 2) throw gitError('pack index version ' + u32(b, 4) + ' is not one this reads');
+      var n = u32(b, 8 + 255 * 4);
+      var shaAt = 8 + 256 * 4, offAt = shaAt + n * 24, bigAt = offAt + n * 4;
+      var bySha = new Map(), sorted = new Array(n);
+      for(var i = 0; i < n; i++){
+        var o = u32(b, offAt + i * 4);
+        if(o >= 0x80000000){
+          var k = o - 0x80000000;
+          o = u32(b, bigAt + k * 8) * 4294967296 + u32(b, bigAt + k * 8 + 4);
+        }
+        bySha.set(hexOf(b, shaAt + i * 20, 20), o);
+        sorted[i] = o;
+      }
+      sorted.sort(function(x, y){ return x - y; });
+      return io.size(pack).then(function(size){
+        if(size === null) throw gitError('a pack index has no pack beside it: ' + pack);
+        return { path: pack, bySha: bySha, sorted: sorted, end: size - 20 };
+      });
+    });
+  }
+  /* The stream for one entry ends where the next entry begins, and the index knows where every
+     entry begins. Cutting there is the only way to hand the decompressor exactly one stream. */
+  function nextOffset(pack, off){
+    var a = pack.sorted, lo = 0, hi = a.length;
+    while(lo < hi){ var mid = (lo + hi) >> 1; if(a[mid] <= off) lo = mid + 1; else hi = mid; }
+    return lo < a.length ? a[lo] : pack.end;
+  }
+  function readPacked(pack, off){
+    var key = pack.path + '@' + off;
+    if(cache.has(key)) return cache.get(key);
+    var p = io.slice(pack.path, off, nextOffset(pack, off)).then(function(b){
+      var i = 0, c = b[i++], type = (c >> 4) & 7, size = c & 15, mul = 16;
+      while(c & 0x80){ c = b[i++]; size += (c & 0x7f) * mul; mul *= 128; }
+      var base;
+      if(type === 6){                                   /* base named by distance back */
+        c = b[i++]; var back = c & 0x7f;
+        while(c & 0x80){ c = b[i++]; back = (back + 1) * 128 + (c & 0x7f); }
+        base = readPacked(pack, off - back);
+      } else if(type === 7){                            /* base named by its hash */
+        base = object(hexOf(b, i, 20)); i += 20;
+      } else if(!GIT_TYPES[type]) throw gitError('a pack entry of unknown type ' + type);
+      return gitInflate(b.subarray(i)).then(function(d){
+        if(d.length !== size) throw gitError('a pack entry inflated to ' + d.length + ' bytes, not ' + size);
+        if(!base) return { type: GIT_TYPES[type], data: d };
+        return base.then(function(bo){ return { type: bo.type, data: applyDelta(bo.data, d) }; });
+      });
+    });
+    cache.set(key, p);
+    return p;
+  }
+  function readLoose(sha){
+    return io.read('objects/' + sha.slice(0, 2) + '/' + sha.slice(2)).then(function(b){
+      if(!b) return null;
+      return gitInflate(b).then(function(d){
+        var sp = d.indexOf(0x20), nul = d.indexOf(0);
+        var data = d.subarray(nul + 1), size = +UTF8.decode(d.subarray(sp + 1, nul));
+        if(data.length !== size) throw gitError('loose object ' + sha + ' is ' + data.length + ' bytes, not ' + size);
+        return { type: UTF8.decode(d.subarray(0, sp)), data: data };
+      });
+    });
+  }
+  function object(sha){
+    if(cache.has(sha)) return cache.get(sha);
+    var p = readLoose(sha).then(function(o){
+      if(o) return o;
+      return loadPacks().then(function(ps){
+        for(var k = 0; k < ps.length; k++){
+          var off = ps[k].bySha.get(sha);
+          if(off !== undefined) return readPacked(ps[k], off);
+        }
+        throw gitError('object ' + sha + ' is not in this repository', { missing: true });
+      });
+    });
+    cache.set(sha, p);
+    return p;
+  }
+
+  function ref(name, depth){
+    if((depth || 0) > 8) return Promise.reject(gitError('refs point at each other in a loop'));
+    return text(name).then(function(t){
+      if(t !== null){
+        t = t.trim();
+        if(/^ref:\s*/.test(t)) return ref(t.replace(/^ref:\s*/, ''), (depth || 0) + 1);
+        if(/^[0-9a-f]{40}$/.test(t)) return t;
+      }
+      return text('packed-refs').then(function(pr){
+        var m, re = /^([0-9a-f]{40}) (\S+)$/gm;
+        while(pr && (m = re.exec(pr))) if(m[2] === name) return m[1];
+        return null;
+      });
+    });
+  }
+  function head(){
+    return text('config').then(function(cfg){
+      if(cfg && /objectformat\s*=\s*sha256/i.test(cfg))
+        throw gitError('this repository uses SHA-256 object names, which this does not read yet');
+      return ref('HEAD');
+    });
+  }
+  function commit(sha){
+    return object(sha).then(function(o){
+      if(o.type !== 'commit') throw gitError(sha + ' is a ' + o.type + ', not a commit');
+      var t = UTF8.decode(o.data), cut = t.indexOf('\n\n');
+      var c = { sha: sha, tree: null, parents: [], time: 0, author: '',
+                message: cut < 0 ? '' : t.slice(cut + 2) };
+      (cut < 0 ? t : t.slice(0, cut)).split('\n').forEach(function(l){
+        var sp = l.indexOf(' '), k = l.slice(0, sp), v = l.slice(sp + 1);
+        if(k === 'tree') c.tree = v;
+        else if(k === 'parent') c.parents.push(v);
+        else if(k === 'author'){ var a = /^(.*?) <[^>]*>/.exec(v); if(a) c.author = a[1]; }
+        else if(k === 'committer'){ var m = /(\d+) [+-]\d{4}$/.exec(v); if(m) c.time = +m[1]; }
+      });
+      return c;
+    });
+  }
+  function tree(sha){
+    return object(sha).then(function(o){
+      if(o.type !== 'tree') throw gitError(sha + ' is a ' + o.type + ', not a tree');
+      var d = o.data, i = 0, out = [];
+      while(i < d.length){
+        var sp = d.indexOf(0x20, i), nul = d.indexOf(0, sp);
+        out.push({ mode: UTF8.decode(d.subarray(i, sp)),
+                   name: UTF8.decode(d.subarray(sp + 1, nul)).normalize('NFC'),
+                   sha: hexOf(d, nul + 1, 20) });
+        i = nul + 21;
+      }
+      return out;
+    });
+  }
+  /* The blob a path names in a tree, or null. A symlink and a submodule are not files whose
+     text can be compared, so they count as absent rather than as something to read. */
+  function blobAt(treeSha, path){
+    var parts = path.normalize('NFC').split('/').filter(Boolean);
+    function step(sha, k){
+      return tree(sha).then(function(es){
+        var e = null;
+        for(var j = 0; j < es.length; j++) if(es[j].name === parts[k]){ e = es[j]; break; }
+        if(!e) return null;
+        if(k === parts.length - 1) return /^100/.test(e.mode) ? e.sha : null;
+        return e.mode === '40000' ? step(e.sha, k + 1) : null;
+      });
+    }
+    return parts.length ? step(treeSha, 0) : Promise.resolve(null);
+  }
+  /* Every version of a file along the first-parent line, newest first, each attributed to the
+     commit that introduced it — the same commits `git log --first-parent -- path` lists,
+     less the ones where the file did not exist. A shallow clone ends where its history does. */
+  function history(path, limit){
+    limit = limit || 40;
+    var versions = [], run = null, seen = 0;
+    function close(){ if(run && run.blob) versions.push(run); }
+    function walk(sha){
+      if(!sha || seen++ > 5000){ close(); return versions; }
+      return commit(sha).then(function(c){
+        return blobAt(c.tree, path).then(function(blob){
+          if(run && blob === run.blob){ run.commit = c; return walk(c.parents[0]); }
+          close();
+          if(versions.length >= limit) return versions;
+          run = { commit: c, blob: blob };
+          return walk(c.parents[0]);
+        });
+      }, function(e){ if(e.missing){ close(); return versions; } throw e; });
+    }
+    return head().then(function(h){
+      if(!h) throw gitError('this repository has no commits yet');
+      return walk(h);
+    });
+  }
+  function blobText(sha){
+    return object(sha).then(function(o){
+      if(o.type !== 'blob') throw gitError(sha + ' is a ' + o.type + ', not a file');
+      return UTF8.decode(o.data);
+    });
+  }
+  return { object: object, ref: ref, head: head, commit: commit, tree: tree,
+           blobAt: blobAt, history: history, blobText: blobText };
+}
+
+/* The reader's four questions, answered from the .git directory handle of the folder that is
+   open. Nothing here can write: the handles are only ever asked for files and listings. */
+function handleIO(gitDir){
+  var files = new Map();
+  function dirAt(parts){
+    return parts.filter(Boolean).reduce(function(h, part){
+      return h.then(function(d){ return d.getDirectoryHandle(part); });
+    }, Promise.resolve(gitDir));
+  }
+  function fileAt(p){
+    if(!files.has(p)){
+      var parts = p.split('/'), name = parts.pop();
+      files.set(p, dirAt(parts).then(function(d){ return d.getFileHandle(name); })
+                               .then(function(h){ return h.getFile(); }));
+    }
+    return files.get(p);
+  }
+  return {
+    read: function(p){
+      return fileAt(p).then(function(f){ return f.arrayBuffer(); })
+                      .then(function(b){ return new Uint8Array(b); }, function(){ return null; });
+    },
+    slice: function(p, a, b){
+      return fileAt(p).then(function(f){ return f.slice(a, b).arrayBuffer(); })
+                      .then(function(x){ return new Uint8Array(x); });
+    },
+    size: function(p){ return fileAt(p).then(function(f){ return f.size; }, function(){ return null; }); },
+    list: function(p){
+      return dirAt(p.split('/')).then(function(d){
+        var it = d.keys(), out = [];
+        function step(){ return it.next().then(function(r){ if(r.done) return out; out.push(r.value); return step(); }); }
+        return step();
+      }, function(){ return null; });
+    }
+  };
+}
+
+/* The history the Compare picker offers for the open file. A new reader each time it is
+   asked for, because refs move and git repacks behind the page's back; the objects
+   themselves never change, so nothing is lost by reading them again. */
+var gitState = { key: null, status: 'idle', versions: [], why: '', repo: null };
+function gitKey(){
+  var r = docs[activeDoc];
+  return (folder && folder.handle && r && r.path) ? folder.name + '|' + r.path : '';
+}
+function loadGitHistory(){
+  var key = gitKey();
+  if(!key){ gitState = { key: '', status: 'none', versions: [], why: '', repo: null }; return; }
+  if(gitState.key === key) return;
+  var path = docs[activeDoc].path;
+  gitState = { key: key, status: 'loading', versions: [], why: '', repo: null };
+  var mine = gitState;
+  folder.handle.getDirectoryHandle('.git').then(function(d){
+    var repo = gitRepo(handleIO(d));
+    mine.repo = repo;
+    return repo.history(path, 40);
+  }, function(){
+    /* a .git that is a file points at a repository kept somewhere else — a worktree or a
+       submodule — and somewhere else is outside what this page was given */
+    return folder.handle.getFileHandle('.git').then(function(){
+      throw gitError('this folder is a git worktree or submodule, and its history is kept outside it');
+    }, function(){
+      throw gitError('this folder is not the top of a git repository');
+    });
+  }).then(function(v){
+    if(gitState !== mine) return;
+    mine.status = 'ready'; mine.versions = v;
+    if(view === 'compare') render();
+  }, function(e){
+    if(gitState !== mine) return;
+    mine.status = 'none'; mine.why = (e && e.message) || 'the repository could not be read';
+    if(view === 'compare') render();
+  });
+}
+function shortDate(t){
+  var d = new Date(t * 1000);
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+function gitOptions(){
+  if(!gitKey()){
+    return (CAN_DIR && !folder) ? '<optgroup label="git history"><option disabled>' +
+      'open the repository’s folder to see this file’s history</option></optgroup>' : '';
+  }
+  loadGitHistory();
+  var label = 'git history of ' + docs[activeDoc].name;
+  if(gitState.status === 'loading')
+    return '<optgroup label="' + esc(label) + '"><option disabled>reading git history…</option></optgroup>';
+  if(gitState.status === 'none')
+    return '<optgroup label="git history"><option disabled>' + esc(gitState.why) + '</option></optgroup>';
+  if(!gitState.versions.length)
+    return '<optgroup label="' + esc(label) + '"><option disabled>this file has never been committed</option></optgroup>';
+  return '<optgroup label="' + esc(label) + '">' + gitState.versions.map(function(v, i){
+    var c = v.commit, msg = (c.message.split('\n')[0] || '').trim();
+    if(msg.length > 56) msg = msg.slice(0, 55) + '…';
+    var key = 'git:' + c.sha;
+    return '<option value="' + key + '"' + (compareWith && compareWith.key === key ? ' selected' : '') + '>' +
+      esc((i === 0 ? 'last commit · ' : '') + shortDate(c.time) + ' · ' + msg + ' · ' + c.sha.slice(0, 7)) +
+      '</option>';
+  }).join('') + '</optgroup>';
+}
+
 /* ===================== rows ===================== */
 function gapHtml(k){
   if(insertAt === k) return editorHtml('new', k);
@@ -2039,9 +2423,10 @@ function renderCompare(){
       }).join('') +
       /* a browsed file is not in the folder or open, so it needs its own option to show as
          the current selection */
-      (compareWith && !opts.some(function(o){ return o.key === compareWith.key; })
+      (compareWith && !/^git:/.test(compareWith.key) && !opts.some(function(o){ return o.key === compareWith.key; })
         ? '<option value="' + esc(compareWith.key) + '" selected>' + esc(compareWith.name) + '</option>'
         : '') +
+      gitOptions() +
     '</select>' +
     '<button type="button" class="cmpbrowse" data-act3="browse" title="Compare against a file anywhere on disk">Browse…</button>' +
     (compareWith ? '<button type="button" class="cmpbrowse" data-act3="blackline" ' +
@@ -2834,6 +3219,18 @@ nb.addEventListener('change', function(ev){
   if(ev.target.id !== 'cmppick') return;
   var key = ev.target.value;
   if(!key){ compareWith = null; render(); return; }
+  if(/^git:/.test(key)){
+    var v = null, st = gitState;
+    st.versions.forEach(function(x){ if('git:' + x.commit.sha === key) v = x; });
+    if(!v || !st.repo) return;
+    st.repo.blobText(v.blob).then(function(t){
+      compareWith = { key: key,
+        name: docs[activeDoc].name + ' @ ' + v.commit.sha.slice(0, 7) + ' (' + shortDate(v.commit.time) + ')',
+        src: t.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n') };
+      render();
+    }).catch(function(e){ toast('Could not read that version: ' + ((e && e.message) || e)); });
+    return;
+  }
   var i = findDoc(key);
   if(i >= 0){
     compareWith = { key: key, name: docs[i].name, src: i === activeDoc ? doc.src : docs[i].src };
@@ -3284,6 +3681,7 @@ function setView(name){
   document.getElementById('lead').hidden = view !== 'markup';
   paintStart();
   if(view !== 'compare') compareRowsCache = [];
+  else gitState.key = null;     /* refs move while the page is open; ask again on the way in */
   rowCache = [];
   render();
 }
