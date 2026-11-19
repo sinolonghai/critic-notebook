@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.0 — 2026-11-19
+
+- **Tracking can be turned off.** The status strip says *Tracking on*; click it and the page
+  becomes an ordinary editor — what you type goes straight into the text, unsigned, with
+  nothing for anyone to accept or reject. It is for the pass before the review: your own
+  draft, your own typos. The strip changes colour while it is off, and it is on again every
+  time the page is opened, because a change nobody can see is the more expensive mistake.
+- Suggestions already in a block survive an untracked edit: rewrite a paragraph somebody else
+  has marked up and their marks come back as they were, names and notes on them. Turning
+  tracking off never quietly accepts another reviewer's work. Comments and highlights are
+  unaffected either way — a comment is not a change.
+- **Clicking anywhere else ends the edit.** It used to end only inside the notebook, so a
+  click on the documents pane, the toolbar or the status line left an editor open behind it;
+  and a block you had opened but not changed kept its editor on screen with nothing behind it.
+  Both are fixed. A click on a control still reaches that control first and then commits, so
+  nothing has to be clicked twice.
+- A new `tracking-off` browser scenario covers both: the editor closes on a click into the
+  documents pane and on a toolbar button, the untracked change lands on disk as plain text,
+  and the other reviewer's suggestion is still there, signed, beside it.
+
 ## 0.11.0 — 2026-11-19
 
 - **Edit on a selection edits just the selection.** It used to open the whole block, so fixing

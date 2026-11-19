@@ -114,6 +114,12 @@ button,input,textarea{font:inherit;color:inherit}
 .status .mini button:hover{border-color:var(--accent);color:var(--accent)}
 .status .mini button:disabled{opacity:.4;cursor:default}
 .status .mini button:disabled:hover{border-color:var(--rule-strong);color:inherit}
+/* Tracking off has to be impossible to be in by accident: the strip it lives in changes
+   colour, not just the button on it. */
+.status.loose{background:var(--edit-glow);border-bottom-color:var(--edit)}
+.status.loose .txt{color:var(--edit)}
+#btn-track.off{border-color:var(--edit);color:var(--edit);background:var(--paper);font-weight:600}
+#btn-track.off:hover{border-color:var(--edit);color:var(--edit)}
 
 /* ---------- three panes ---------- */
 /* Named areas, not auto-placement. A hidden pane leaves the grid, and auto-placement then
@@ -595,10 +601,11 @@ button,input,textarea{font:inherit;color:inherit}
     </div>
   </div>
 
-  <div class="status">
+  <div class="status" id="status">
     <span class="txt" id="stxt"></span>
     <span class="sver" id="sver" title="The version of this page"></span>
     <span class="mini">
+      <button type="button" id="btn-track" aria-pressed="true">Tracking on</button>
       <button type="button" id="btn-all-yes">Accept all</button>
       <button type="button" id="btn-all-no">Reject all</button>
     </span>
@@ -612,9 +619,10 @@ button,input,textarea{font:inherit;color:inherit}
     </aside>
 
     <main class="center" id="center">
-      <p class="lead" id="lead"><b>Click any block</b> to edit its text; what you changed is recorded as a
-      tracked suggestion. Opening another block commits the one you were in — <kbd>Esc</kbd> discards
-      instead. Select a phrase to leave a comment. <kbd data-mod="Z">⌘Z</kbd> undoes anything.</p>
+      <p class="lead" id="lead"><b>Click any block</b> to edit its text; what you changed is
+      <span id="lead-mode">recorded as a tracked suggestion</span>. Clicking anywhere else commits the
+      block you were in — <kbd>Esc</kbd> discards instead. Select a phrase to leave a comment.
+      <kbd data-mod="Z">⌘Z</kbd> undoes anything.</p>
       <div class="start" id="start" hidden>
         <span class="lbl"><b>This is the tutorial.</b> Nothing in it is written to disk.
         Open your own writing to review it for real.</span>
@@ -649,7 +657,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.11.0';
+var VERSION = '0.12.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -670,7 +678,13 @@ var SAMPLE = [
 '',
 'Click any block to edit its text as plain prose. There is no markup to type: what you',
 'changed is worked out by {~~comparison~>a word-level diff~~}{>>@dana: "diff" is clearer<<} and',
-'recorded as a tracked suggestion. Opening another block commits the one you were in.',
+'recorded as a tracked suggestion. Clicking anywhere else commits the block you were in.',
+'',
+'**Tracking on** in the strip above is what records them. Turn it off and the page becomes an',
+'ordinary editor: what you type goes straight into the text, unsigned, with nothing for anyone',
+'to accept or reject — for the draft before the review, or your own typos. Suggestions already',
+'in a block are left alone, so turning it off never quietly accepts somebody else\'s work. It is',
+'on again every time the page is opened.',
 '',
 'Between any two blocks sits a small `+`, and where both of them are plain paragraphs a `−`',
 'as well. The first adds a paragraph there; the second proposes joining the two into one. This',
@@ -1199,7 +1213,10 @@ function carryOf(cell){
   });
   return carry;
 }
-function opsToSource(ops, stamp, carry, used){
+/* `loose` is tracking turned off: a change this edit makes goes in as plain text, while one
+   that was already in the block — carry knows it by what it does — comes back as the mark it
+   was, with the name it had. */
+function opsToSource(ops, stamp, carry, used, loose){
   var out = '', i = 0;
   while(i < ops.length){
     if(ops[i][0] === '='){ out += ops[i][1]; i++; continue; }
@@ -1209,6 +1226,10 @@ function opsToSource(ops, stamp, carry, used){
       i++;
     }
     var g = emitGroup(dels, inss);
+    if(loose && !(carry && carry[markKey(g.rem, g.add)] !== undefined)){
+      out += g.pre + g.add + g.suf;
+      continue;
+    }
     out += g.pre + g.mid;
     if(g.mid){
       /* every mark is signed, not only the first one of an edit. Tracked changes trade
@@ -1252,12 +1273,12 @@ function cellComments(cell, skipWho, seen){
     return s;
   }).filter(Boolean).join('');
 }
-function buildBlockSource(cell, newText, stamp){
+function buildBlockSource(cell, newText, stamp, loose){
   var base = resolveRange(cell.a, cell.b, 'orig');
   var want = tidy(newText);
   if(want === base) return { src: want, changed: false, base: base, used: {} };
   var used = {};
-  var src = opsToSource(diffTokens(tokenize(base), tokenize(want)), stamp || '', carryOf(cell), used);
+  var src = opsToSource(diffTokens(tokenize(base), tokenize(want)), stamp || '', carryOf(cell), used, loose);
   return { src: src, changed: true, base: base, used: used };
 }
 
@@ -1523,6 +1544,14 @@ var history = [];
 var view = 'markup';
 var openCell = null, insertAt = null;
 var draft = '', draftBase = '';
+/* Tracking off writes what you type straight into the text, the way an editor does: no mark,
+   no name, nothing for anyone to accept or reject later. It is for the pass before the review
+   — your own draft, your own typos — and it is deliberately not remembered between sessions,
+   because the cost of forgetting it is on when a suggestion goes unrecorded is a change nobody
+   can see. Suggestions already in the block are left exactly as they are: an untracked edit
+   around them rebuilds them with their names, so turning tracking off never silently accepts
+   somebody else's work. Comments and highlights are not changes and are made either way. */
+var tracking = true;
 var rowCache = [], localIdx = {}, lit = null;
 var curCell = -1;          /* cell being rendered, so a mark row knows where it lives */
 var compareRowsCache = [];
@@ -1902,6 +1931,11 @@ function joinable(k){
 function joinBlocks(k){
   var j = joinable(k);
   if(!j) return;
+  if(!tracking){
+    editSource(j.a, j.b, j.gap.charAt(0));
+    toast('Joined \u2014 ' + MOD + 'Z puts the break back');
+    return;
+  }
   var who = authorName();
   editSource(j.a, j.b, j.gap.charAt(0) + '{--' + j.gap.slice(1) + '--}' + (who ? '{>>@' + who + '<<}' : ''));
   maybeSignHint();
@@ -2342,19 +2376,22 @@ function splitWarning(kind, idx){
     : c.kind === 'heading'
       ? 'A heading is one line; everything after the blank line becomes a paragraph below it.'
       : 'A blank line splits this block in two.';
-  return '<p class="warn">' + esc(why) + ' Committing is still a suggestion \u2014 rejecting it ' +
-         'puts the block back as it was.</p>';
+  return '<p class="warn">' + esc(why) + (tracking
+         ? ' Committing is still a suggestion \u2014 rejecting it puts the block back as it was.'
+         : ' Tracking is off, so this one is not a suggestion \u2014 ' + MOD + 'Z puts the block back.') +
+         '</p>';
 }
 function previewHtml(kind, idx){
-  var lab = '<div class="lab">recorded as</div>' + splitWarning(kind, idx);
+  var lab = '<div class="lab">' + (tracking ? 'recorded as' : 'saved as, untracked') + '</div>' +
+            splitWarning(kind, idx);
   if(tidy(draft) === tidy(draftBase)) return lab + '<p class="none">No change yet. Just edit the text above.</p>';
   if(kind === 'cell' && !doc.cells[idx]) return lab;
   if(kind === 'new'){
     var body = tidy(draft);
     if(!body) return lab + '<p class="none">Nothing to add yet.</p>';
-    return lab + '<div class="inner">' + renderSnippet('{++' + body + '++}') + '</div>';
+    return lab + '<div class="inner">' + renderSnippet(tracking ? '{++' + body + '++}' : body) + '</div>';
   }
-  var built = buildBlockSource(doc.cells[idx], draft, '');
+  var built = buildBlockSource(doc.cells[idx], draft, '', !tracking);
   if(!built.changed) return lab + '<p class="none">Back to the original — committing clears this block\'s suggestions.</p>';
   return lab + '<div class="inner">' + renderSnippet(built.src) + '</div>';
 }
@@ -2619,6 +2656,27 @@ function paintStart(){
       '. Rejecting a suggestion takes that block back to ' + esc(r.from.older) + '.';
   document.getElementById('bl-adopt').textContent = 'Make it the new ' + r.from.name;
 }
+function paintTracking(){
+  var b = document.getElementById('btn-track');
+  b.textContent = tracking ? 'Tracking on' : 'Tracking off';
+  b.classList.toggle('off', !tracking);
+  b.setAttribute('aria-pressed', tracking ? 'true' : 'false');
+  b.title = tracking
+    ? 'Changes are recorded as suggestions, signed with your name. Click to edit the text directly instead.'
+    : 'Editing goes straight into the text, unrecorded and unsigned. Click to record changes as suggestions again.';
+  document.getElementById('status').classList.toggle('loose', !tracking);
+  var lead = document.getElementById('lead-mode');
+  if(lead) lead.textContent = tracking ? 'recorded as a tracked suggestion'
+                                       : 'written straight into the text, untracked';
+}
+function setTracking(on){
+  if(tracking === on) return;
+  flushEditor();          /* whatever is open was begun under the old rule; finish it there */
+  tracking = on;
+  paintTracking();
+  toast(on ? 'Tracking on — changes are recorded as suggestions'
+           : 'Tracking off — what you type changes the text itself');
+}
 function paintStatus(){
   var open = openCount();
   var label = view === 'original' ? 'original' : view === 'final' ? 'final' : 'current';
@@ -2634,6 +2692,7 @@ function paintStatus(){
      panel and shut whenever anyone has folded it, and the question comes up every time the
      page is republished. */
   document.getElementById('sver').textContent = 'v' + VERSION;
+  paintTracking();
   paintStart();
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
   document.getElementById('btn-undo').disabled = history.length === 0;
@@ -3185,35 +3244,44 @@ function flushEditor(){
   var wasCell = openCell, wasInsert = insertAt, text = draft, base = draftBase;
   openCell = null; insertAt = null; draft = ''; draftBase = '';
   if(wasCell === null && wasInsert === null) return false;
-  if(tidy(text) === tidy(base)) return false;
+  /* The state is already cleared, so whatever happens below, what is on the screen has to be
+     drawn again — or clicking away from a block you changed nothing in leaves its editor
+     standing with nothing behind it. */
+  if(tidy(text) === tidy(base)){ render(); return false; }
 
-  var who = authorName(), stamp = who ? '{>>@' + who + '<<}' : '';
+  var who = authorName(), stamp = (tracking && who) ? '{>>@' + who + '<<}' : '';
 
   if(wasInsert !== null){
     /* the separating blank line goes INSIDE the mark, or rejecting the new block would
        leave its blank lines behind in the original */
     var body = tidy(text);
-    if(!body) return false;
+    if(!body){ render(); return false; }
     var cells = doc.cells, at, repl;
-    if(!cells.length){ at = 0; repl = '{++' + body + '++}' + stamp; }
-    else if(wasInsert === 0){ at = cells[0].a; repl = '{++' + body + '\n\n++}' + stamp; }
-    else { at = cells[Math.min(wasInsert, cells.length) - 1].b; repl = '{++\n\n' + body + '++}' + stamp; }
+    if(!cells.length){ at = 0; repl = tracking ? '{++' + body + '++}' + stamp : body; }
+    else if(wasInsert === 0){
+      at = cells[0].a;
+      repl = tracking ? '{++' + body + '\n\n++}' + stamp : body + '\n\n';
+    } else {
+      at = cells[Math.min(wasInsert, cells.length) - 1].b;
+      repl = tracking ? '{++\n\n' + body + '++}' + stamp : '\n\n' + body;
+    }
     editSource(at, at, repl);
-    maybeSignHint();
-    toast('New block added as a suggestion');
+    if(tracking) maybeSignHint();
+    toast(tracking ? 'New block added as a suggestion' : 'New block added');
     return true;
   }
 
   var cell = doc.cells[wasCell];
-  if(!cell) return false;
-  var built = buildBlockSource(cell, text, stamp);
+  if(!cell){ render(); return false; }
+  var built = buildBlockSource(cell, text, stamp, !tracking);
   var kept = built.changed ? cellComments(cell, who, built.used) : '';
   var hadDelims = DANGER_RE.test(text);
   DANGER_RE.lastIndex = 0;
   editSource(cell.a, cell.b, built.src + kept);
-  if(built.changed) maybeSignHint();
-  toast(hadDelims ? 'Recorded (markup characters you typed were replaced with spaces)'
-                  : (built.changed ? 'Change recorded' : 'Block restored to the original'));
+  if(built.changed && tracking) maybeSignHint();
+  toast(hadDelims ? 'Saved (markup characters you typed were replaced with spaces)'
+      : !built.changed ? 'Block restored to the original'
+      : tracking ? 'Change recorded' : 'Changed, not tracked');
   return true;
 }
 
@@ -3223,10 +3291,26 @@ nb.addEventListener('mousedown', function(ev){
   if(noteEdit && !ev.target.closest('.noteed') && !ev.target.closest('[data-note]')) cancelNoteEdit();
   if(openCell !== null || insertAt !== null) flushEditor();
 }, true);
+/* Clicking away from the block you are editing ends the edit, wherever you click: the
+   toolbar, the status line, either pane, the margin. It used to end only inside the notebook,
+   so a click on the documents pane left an editor open behind it and the next thing you typed
+   went somewhere you were no longer looking. What is still exempt is what belongs to the edit
+   itself — the editor, a dialog over it, the selection popover — and the name box, because
+   signing a suggestion is part of making one, not leaving it. */
 document.addEventListener('mousedown', function(ev){
-  if(ev.target.closest('.ed, .bar, .status, .veil, .pop, .pane')) return;
+  if(ev.target.closest('.ed, .veil, .pop, .whoami')) return;
   if(nb.contains(ev.target)) return;
-  if(openCell !== null || insertAt !== null) flushEditor();
+  if(openCell === null && insertAt === null) return;
+  /* A control gets its click first. Committing here would repaint the pane under the pointer,
+     the button the click was aimed at would be gone before the mouse came up, and no click
+     would be delivered at all — the file you picked would need picking twice. Most of these
+     commit the edit themselves; this catches the ones that do not, once the click has
+     landed. */
+  if(ev.target.closest('button, a, input, select, textarea, label, [role="button"]')){
+    setTimeout(function(){ if(openCell !== null || insertAt !== null) flushEditor(); }, 0);
+    return;
+  }
+  flushEditor();
 });
 
 nb.addEventListener('change', function(ev){
@@ -3602,6 +3686,11 @@ function openPop(range, rect){
     hidePop();
     var sel = window.getSelection();
     if(sel && sel.removeAllRanges) sel.removeAllRanges();
+    if(!tracking){
+      editSource(span.a, span.b, '');
+      toast('Deleted — ' + MOD + 'Z puts it back');
+      return;
+    }
     editSource(span.a, span.b, '{--' + gone + '--}' + (who ? '{>>@' + who + '<<}' : ''));
     maybeSignHint();
     toast('Marked for deletion — ✕ on the row puts it back');
@@ -3635,9 +3724,10 @@ function openPop(range, rect){
     pop.innerHTML =
       '<label for="pe">Edit the selection</label>' +
       '<textarea id="pe" rows="1" spellcheck="true"></textarea>' +
-      '<p class="keys">Enter records it as a suggestion \u00b7 Shift+Enter for a line break \u00b7 Esc cancels</p>' +
+      '<p class="keys">Enter ' + (tracking ? 'records it as a suggestion' : 'changes the text') +
+      ' \u00b7 Shift+Enter for a line break \u00b7 Esc cancels</p>' +
       '<div class="row"><button type="button" data-x="close">Cancel</button>' +
-      '<button type="button" class="go" data-x="go">Suggest</button></div>';
+      '<button type="button" class="go" data-x="go">' + (tracking ? 'Suggest' : 'Change') + '</button></div>';
     var box = pop.querySelector('#pe');
     box.value = old;
     function fit(){ box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight + 2, 220) + 'px'; }
@@ -3660,6 +3750,13 @@ function openPop(range, rect){
       var sel = window.getSelection();
       if(sel && sel.removeAllRanges) sel.removeAllRanges();
       if(want === old) return;
+      if(!tracking){
+        /* emptying the box deletes, and the spacing goes with it the way it does on Delete */
+        var span = want ? { a: a, b: b } : (deleteSpan({ a: a, b: b }) || { a: a, b: b });
+        editSource(span.a, span.b, want);
+        toast((want ? 'Changed' : 'Deleted') + ' — ' + MOD + 'Z puts it back');
+        return;
+      }
       var who = authorName();
       editSource(a, b, opsToSource(diffTokens(tokenize(old), tokenize(want)), who ? '{>>@' + who + '<<}' : ''));
       maybeSignHint();
@@ -3816,6 +3913,7 @@ document.getElementById('btn-all-yes').addEventListener('click', function(){
   });
 });
 document.getElementById('btn-all-no').addEventListener('click', function(){ flushEditor(); resolveAll('reject'); toast('All rejected'); });
+document.getElementById('btn-track').addEventListener('click', function(){ setTracking(!tracking); });
 document.getElementById('btn-undo').addEventListener('click', undo);
 
 var authorBox = document.getElementById('author');

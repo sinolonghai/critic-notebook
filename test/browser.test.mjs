@@ -335,6 +335,88 @@ scenario('edit-selection', async (browser) => {
   await ctx.close(); proc.kill();
 });
 
+/* Tracking off, and leaving an editor by clicking anywhere else. The two met in one bug
+   report and they meet here: the untracked edit is committed by clicking the documents pane,
+   which used to leave the editor standing. What matters on disk is that the reviewer's own
+   change went in as plain text while the suggestion already in the paragraph came back
+   untouched, with her name still on it. */
+scenario('tracking-off', async (browser) => {
+  const ORIG = 'The cat {~~sat~>perched~~}{>>@ann<<} on the mat and waited.\n\n' +
+               'A second paragraph, so there is somewhere else to click.\n';
+  const f = fixture('tracking.md', ORIG);
+  const { url, proc } = await servePanel(f);
+  const ctx = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto(url); await sleep(1300);
+  const fr = frameOf(p);
+  await fr.evaluate(() => { document.getElementById('author').value = 'hai'; });
+
+  const openFirst = () => fr.evaluate(() => document.querySelector('.out[data-cell="0"]').click());
+  const isOpen = () => fr.evaluate(() => !!document.getElementById('edbox'));
+
+  /* an editor left open by a click that changed nothing — the part that stayed on screen */
+  await openFirst(); await sleep(350);
+  ok(await isOpen(), 'a block opens for editing');
+  await fr.evaluate(() => document.getElementById('doclist')
+    .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+  await sleep(350);
+  ok(!(await isOpen()), 'clicking the documents pane closes it, with nothing typed');
+
+  /* turn tracking off */
+  ok(await fr.evaluate(() => document.getElementById('btn-track').textContent.trim() === 'Tracking on'),
+     'tracking starts on');
+  await fr.click('#btn-track'); await sleep(300);
+  const off = await fr.evaluate(() => ({
+    label: document.getElementById('btn-track').textContent.trim(),
+    pressed: document.getElementById('btn-track').getAttribute('aria-pressed'),
+    loose: document.querySelector('.status').classList.contains('loose') }));
+  ok(off.label === 'Tracking off' && off.pressed === 'false' && off.loose,
+     'the button says so and the status strip changes with it — ' + JSON.stringify(off));
+
+  /* edit with it off, and commit by clicking away rather than into another block */
+  await openFirst(); await sleep(350);
+  await fr.fill('#edbox', 'The cat perched on the mat and slept.');
+  await sleep(250);
+  ok(await fr.evaluate(() => /untracked/.test(document.querySelector('.ed .lab').textContent)),
+     'the preview says it is not being recorded');
+  await fr.evaluate(() => document.getElementById('doclist')
+    .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+  await sleep(500);
+  ok(!(await isOpen()), 'clicking away commits it and closes the editor');
+  await fr.evaluate(() => document.getElementById('btn-save').click()); await sleep(900);
+  let disk = fs.readFileSync(f, 'utf8');
+  ok(/and slept\./.test(disk) && !/\{[-+]/.test(disk), 'the change is in the text, with no mark of its own — ' +
+     JSON.stringify(disk.split('\n')[0]));
+  ok(/\{~~sat~>perched~~\}\{>>@ann<<\}/.test(disk),
+     "and Ann's suggestion came back exactly as it was, name and all");
+
+  /* and on again: the next change is a signed suggestion */
+  await fr.click('#btn-track'); await sleep(300);
+  await openFirst(); await sleep(350);
+  await fr.fill('#edbox', 'The cat perched on the rug and slept.');
+  await fr.evaluate(() => document.getElementById('doclist')
+    .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+  await sleep(500);
+  await fr.evaluate(() => document.getElementById('btn-save').click()); await sleep(900);
+  disk = fs.readFileSync(f, 'utf8');
+  ok(/\{~~mat~>rug~~\}\{>>@hai<<\}/.test(disk), 'turning it back on records the next change again — ' +
+     JSON.stringify((disk.match(/\{~~mat[\s\S]{0,24}/) || [''])[0]));
+  ok(/\{~~sat~>perched~~\}\{>>@ann<<\}/.test(disk), "with Ann's still beside it");
+
+  /* a button in the bar ends the edit too, and still does its own job: the commit waits for
+     the click so the control is not repainted out from under the pointer */
+  await openFirst(); await sleep(350);
+  const paneWas = await fr.evaluate(() => document.getElementById('app').classList.contains('out-open'));
+  await fr.click('#tog-out'); await sleep(450);
+  ok(!(await isOpen()), 'clicking a button in the toolbar closes the editor');
+  ok(await fr.evaluate(w => document.getElementById('app').classList.contains('out-open') !== w, paneWas),
+     'and the button still did what it is for');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close(); proc.kill();
+});
+
 /* The controls between blocks, the confirmation, and what joining writes. */
 scenario('join', async (browser) => {
   const ORIG = '# A heading\n\nFirst paragraph, which ends here.{>>@hai: check this<<}\n\n' +
