@@ -261,6 +261,80 @@ scenario('delete', async (browser) => {
   await ctx.close(); proc.kill();
 });
 
+/* Edit on a short selection in a long paragraph edits the selection, in place, instead of
+   opening the whole block and leaving you to find the five words again. */
+scenario('edit-selection', async (browser) => {
+  const LONG = 'In the spring of that year the migration finished three weeks late, ' +
+    'after a winter of arguments about the schema, two changes of lead, and a rollback ' +
+    'that nobody wanted to talk about, and it cost 206 thousand in the end.';
+  const ORIG = LONG + '\n';
+  const f = fixture('editsel.md', ORIG);
+  const { url, proc } = await servePanel(f);
+  const ctx = await browser.newContext({ viewport: { width: 980, height: 800 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto(url); await sleep(1300);
+  const fr = frameOf(p);
+  await fr.evaluate(() => { document.getElementById('author').value = 'hai'; });
+
+  const select = w => fr.evaluate(w => {
+    for(const s of document.querySelectorAll('.out .tx')){
+      const n = s.firstChild; if(!n || n.nodeType !== 3) continue;
+      const i = n.nodeValue.indexOf(w); if(i < 0) continue;
+      const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + w.length);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      return true;
+    }
+    return false;
+  }, w);
+
+  ok(await select('three weeks late'), 'selected three words in the middle of a long paragraph');
+  await sleep(450);
+  await fr.click('.pop [data-x="edit"]'); await sleep(400);
+  const box = await fr.evaluate(() => { const t = document.querySelector('.pop textarea');
+    return t ? { v: t.value, focused: document.activeElement === t } : null; });
+  ok(box && box.v === 'three weeks late', 'Edit opens a box holding just the selection — ' + JSON.stringify(box && box.v));
+  ok(box && box.focused, 'with the cursor already in it');
+  ok(await fr.evaluate(() => !document.getElementById('edbox')), 'and the whole block is not opened');
+  const pr = await fr.evaluate(() => { const r = document.querySelector('.pop').getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, vh: innerHeight, vw: innerWidth }; });
+  ok(pr.top >= 0 && pr.bottom <= pr.vh && pr.left >= 0 && pr.right <= pr.vw,
+     'and the box sits wholly on screen — ' + JSON.stringify(pr));
+  if(process.env.CN_SHOT) await p.screenshot({ path: process.env.CN_SHOT });
+
+  /* Esc leaves everything as it was */
+  await fr.press('.pop textarea', 'Escape'); await sleep(300);
+  ok(await fr.evaluate(() => !document.querySelector('.pop')), 'Esc closes it');
+  ok(await fr.evaluate(() => !document.querySelector('.cm')), 'having changed nothing');
+
+  /* type and press Enter */
+  await select('three weeks late'); await sleep(450);
+  await fr.click('.pop [data-x="edit"]'); await sleep(350);
+  await fr.fill('.pop textarea', 'two weeks late');
+  await fr.press('.pop textarea', 'Enter'); await sleep(600);
+  ok(await fr.evaluate(() => /three/.test((document.querySelector('.cm.del, .cm.fine .wd.del') || {}).textContent || '')),
+     'Enter records it as a suggestion, struck where it stands');
+
+  /* the frame round the block being edited is orange, not the blue every button uses */
+  await fr.evaluate(() => document.querySelector('.out[data-cell]').click()); await sleep(400);
+  const border = await fr.evaluate(() => { const e = document.querySelector('.ed');
+    return e ? getComputedStyle(e).borderTopColor : null; });
+  ok(border && /rgb\(232, 115, 12\)|rgb\(255, 157, 66\)/.test(border), 'the block being edited has an orange frame — ' + border);
+  await fr.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  await sleep(300);
+
+  await fr.evaluate(() => document.getElementById('btn-save').click()); await sleep(900);
+  const disk = fs.readFileSync(f, 'utf8');
+  ok(/\{~~three~>two~~\}\{>>@hai<<\}/.test(disk), 'the file holds one small signed replacement, not a rewritten paragraph — ' +
+     JSON.stringify((disk.match(/\{[-+~][\s\S]{0,40}/) || [''])[0]));
+  const rejected = disk.replace(/\{~~([\s\S]*?)~>[\s\S]*?~~\}/g, '$1').replace(/\{>>[\s\S]*?<<\}/g, '');
+  ok(rejected === ORIG, 'and rejecting it gives the paragraph back exactly');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close(); proc.kill();
+});
+
 /* The controls between blocks, the confirmation, and what joining writes. */
 scenario('join', async (browser) => {
   const ORIG = '# A heading\n\nFirst paragraph, which ends here.{>>@hai: check this<<}\n\n' +

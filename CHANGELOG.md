@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0 — 2026-11-19
+
+- **Edit on a selection edits just the selection.** It used to open the whole block, so fixing
+  three words in a long paragraph meant finding them again in the editor. Now a small box opens
+  over the selection holding only what you selected, with the cursor at its end: retype, press
+  Enter, and the change is recorded as a signed, word-level suggestion where it stands —
+  `{~~three~>two~~}{>>@you<<}`, not a rewritten paragraph. Shift+Enter is a line break, Esc
+  leaves everything as it was, and emptying the box marks the selection for deletion. A
+  selection inside an existing mark still opens the block, since a mark cannot be edited from
+  inside another one.
+- **Livelier colours.** Insertions are a clearer green and deletions a clearer red, in light and
+  dark, still at least 4.45:1 against the page. The block being edited has an orange frame and
+  rail, so where you are typing is obvious at a glance.
+- The browser suite checks that the box holds only the selection, sits wholly on screen, takes
+  Esc without changing anything, writes one small replacement to disk, and that rejecting it
+  gives the paragraph back byte for byte.
+
 ## 0.10.0 — 2026-11-17
 
 - **The Compare picker lists the open file's git history** when the folder you opened is the top

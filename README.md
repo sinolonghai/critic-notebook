@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.10.0** · [changelog](CHANGELOG.md)
+**0.11.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -186,7 +186,8 @@ that block.
 | Delete a phrase | Select it, choose **Delete** |
 | Comment on a phrase | Select it, choose **Comment**, type it |
 | Copy a phrase | Select it, choose **Copy** — or just press the copy shortcut |
-| Rewrite the block you are reading | Select anything in it, choose **Edit** |
+| Change a few words | Select them, choose **Edit**, retype in the box, press Enter |
+| Rewrite the whole block | Click it (or select inside a mark and choose **Edit**) |
 | Edit or delete a comment | Click the comment text; empty it to remove it |
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Undo anything | `⌘Z` (80 steps) |
@@ -330,7 +331,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.10.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.11.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
