@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.13.0 — 2026-11-19
+
+- **Unsaved work is kept, and said out loud.** A page at the top of a tab gets to ask before
+  it closes. A page drawn inside another app — an assistant's side panel, a canvas, any
+  iframe — does not: the host removes the frame and `pagehide` is the first and last the page
+  hears of it. A review done in one of those was lost that way, so now two things happen.
+- While there is unsaved work in a frame, a strip above the document says that the app around
+  it can close or redraw it without asking, and offers the one button that gets the text out.
+- And every unsaved document is kept in the browser as it is edited — written on a pause in
+  typing, and again on `pagehide`, which is the last moment a frame is given — then offered
+  back the next time the page opens: *Unsaved work from last time.* What comes back is what
+  you had, still unsaved. A frame sandboxed without same-origin has no storage at all and
+  nothing can be kept for it; there the strip says so rather than implying a safety net that
+  is not there.
+- A `torn-out` browser scenario does what the host did: it draws the page in a frame, marks a
+  document up, removes the frame with no warning, draws it again, and takes the work back.
+
 ## 0.12.0 — 2026-11-19
 
 - **Tracking can be turned off.** The status strip says *Tracking on*; click it and the page

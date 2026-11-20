@@ -417,6 +417,63 @@ scenario('tracking-off', async (browser) => {
   await ctx.close(); proc.kill();
 });
 
+/* A review done in somebody else's side panel — a chat app showing the page in a frame it
+   owns. The frame is removed without asking, which is what happened to a real review: there
+   is no beforeunload for a page inside another page. What the page can do is say so while
+   the work is unsaved, and keep a copy that is offered back when it is drawn again. */
+scenario('torn-out', async (browser) => {
+  const host = fixture('host.html',
+    '<!doctype html><meta charset=utf-8><body><div id=w></div><script>\n' +
+    'window.mk=()=>{const f=document.createElement("iframe");f.id="f";f.style="width:900px;height:700px";' +
+    'f.src="page.html";document.getElementById("w").appendChild(f);};\n' +
+    'window.kill=()=>document.getElementById("f").remove();\n' +
+    '</script></body>');
+  fs.copyFileSync(PAGE, path.join(path.dirname(host), 'page.html'));
+  const ctx = await browser.newContext({ viewport: { width: 1000, height: 820 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto('file://' + host);
+  await p.evaluate(() => mk()); await sleep(1200);
+  let fr = p.frames().find(f => f.url().endsWith('page.html'));
+
+  const strip = () => fr.evaluate(() => { const e = document.getElementById('risk');
+    return e && !e.hidden ? e.textContent.replace(/\s+/g, ' ').trim() : null; });
+
+  ok((await strip()) === null, 'nothing is said while there is nothing unsaved');
+
+  /* paste a document in and mark it up, so there is work with no file behind it */
+  await fr.click('[data-act2="paste"]'); await sleep(350);
+  await fr.fill('#pastebox', '# Note\n\nThe paragraph as it stands today.\n');
+  await fr.click('#pasteok'); await sleep(500);
+  await fr.evaluate(() => document.querySelector('.out[data-cell="1"]').click()); await sleep(300);
+  await fr.fill('#edbox', 'The paragraph as it stands this morning.');
+  await fr.evaluate(() => document.querySelector('.out[data-cell="0"]').click()); await sleep(900);
+
+  const said = await strip();
+  ok(said && /Not saved/.test(said), 'unsaved work in a frame says so where the document is — ' +
+     JSON.stringify((said || '').slice(0, 60)));
+  ok(said && /without asking/.test(said), 'and says the app around it can close it');
+
+  /* torn out with no chance to object, exactly as it went */
+  await p.evaluate(() => kill()); await sleep(500);
+  await p.evaluate(() => mk()); await sleep(1300);
+  fr = p.frames().find(f => f.url().endsWith('page.html'));
+  const panel = await fr.evaluate(() => { const v = document.querySelector('.veil[data-draft]');
+    return v ? v.textContent.replace(/\s+/g, ' ').trim() : null; });
+  ok(panel && /Unsaved work/.test(panel) && /pasted\.md/.test(panel),
+     'drawn again, it offers the work back — ' + JSON.stringify((panel || '').slice(0, 70)));
+
+  await fr.click('.veil[data-draft] [data-x="take"]'); await sleep(600);
+  const back = await fr.evaluate(() => ({
+    text: document.querySelector('.cm, .mk') ? 'marks' : 'none',
+    dirty: !document.getElementById('btn-save').disabled }));
+  ok(back.text === 'marks', 'the marks are there again');
+  ok(back.dirty, 'and it is still unsaved, as it was');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close();
+});
+
 /* The controls between blocks, the confirmation, and what joining writes. */
 scenario('join', async (browser) => {
   const ORIG = '# A heading\n\nFirst paragraph, which ends here.{>>@hai: check this<<}\n\n' +

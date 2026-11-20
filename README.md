@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.12.0** · [changelog](CHANGELOG.md)
+**0.13.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -191,6 +191,7 @@ that block.
 | Edit or delete a comment | Click the comment text; empty it to remove it |
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Edit without recording it | **Tracking on** in the status strip — click to turn it off |
+| Get unsaved work back after a crash or a host closing the page | It is offered on the next open |
 | Undo anything | `⌘Z` (80 steps) |
 | Save | `⌘S` — greyed out when there is nothing to write |
 | Save to a new file | `Save as…` |
@@ -238,6 +239,25 @@ Edits are diffed against the **original**, not against your previous edit, so ch
 sentence five times still produces one clean `{~~old~>new~~}` rather than five nested layers.
 The diff is word-level for Latin scripts and character-level for CJK, so changing two characters
 in a Chinese paragraph marks two characters.
+
+### Unsaved work, and where it can be lost
+
+A page at the top of a browser tab gets to ask before it closes, and the tab asks. A page
+drawn **inside another app** — a chat assistant's side panel, a canvas, any iframe — does not:
+the host removes the frame and `pagehide` is the first and last the page hears of it. There is
+no way for the page to object, and no way to make that host notice there was something
+unsaved in it.
+
+So the page does the two things it can. While there is unsaved work in a frame, a strip above
+the document says that the app around it can close it without asking. And every unsaved
+document is kept in this browser's storage as you edit, and offered back the next time the
+page opens: *Unsaved work from last time — bring it back or discard it.* What comes back is
+what you had, still unsaved and still to be written somewhere.
+
+One case defeats both. A frame sandboxed without same-origin has no storage at all, so
+nothing can be kept for it; the strip says so instead of implying a safety net that is not
+there. For a long review, the page belongs in a browser tab of its own, or in
+`tools/panel.mjs`, where Save writes a real file.
 
 ### Turning tracking off
 
@@ -346,7 +366,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.12.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.13.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -690,6 +710,7 @@ beside your documents, and none of it leaves the machine.
 | | `cm-pane-side`, `cm-pane-out` | whether each side pane is open |
 | | `cm-open-<folder>` | which subfolders are expanded, per folder |
 | | `cm-signhint` | whether the one-time "sign your suggestions" note has shown |
+| | `cm-drafts` | unsaved documents, kept as you edit and offered back on the next open |
 | IndexedDB `critic-notebook` → `kv` | `folders` | folder history: handles, names, last-used |
 | | `dir` | the single folder an earlier version stored, kept for migration |
 

@@ -236,6 +236,12 @@ button,input,textarea{font:inherit;color:inherit}
   color:var(--accent);border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:500;
   cursor:pointer;white-space:nowrap}
 .start button:hover{background:var(--accent-soft)}
+/* The one strip that is a warning rather than an offer, so it is the colour the page uses
+   for work in progress and not the quiet blue of everything else. */
+.risk{border-color:var(--edit);background:var(--edit-glow)}
+.risk .lbl{color:var(--ink)}
+.risk button{border-color:var(--edit);color:var(--edit);font-weight:600}
+.risk button:hover{background:var(--edit-glow)}
 
 /* These stay on screen, and are drawn like the ✓ and ✕ on a suggestion row, because they
    do the same kind of thing and are read in the same glance. They were on hover and then
@@ -629,6 +635,10 @@ button,input,textarea{font:inherit;color:inherit}
         <button type="button" id="start-folder">Open folder</button>
         <button type="button" id="start-file">Open file</button>
       </div>
+      <div class="start risk" id="risk" hidden>
+        <span class="lbl" id="risk-txt"></span>
+        <button type="button" id="risk-save">Save now</button>
+      </div>
       <div class="start" id="bl" hidden>
         <span class="lbl" id="bl-txt"></span>
         <button type="button" id="bl-adopt"></button>
@@ -657,7 +667,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.12.0';
+var VERSION = '0.13.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -2639,6 +2649,23 @@ function paintSaveState(){
     : inHost() ? 'Hand the document back (' + MOD + 'S)'
     : CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Download the .md (' + MOD + 'S)' : 'Copy the markdown (' + MOD + 'S)';
 }
+/* Who will warn you, and whether anything is being kept. A top-level page has beforeunload
+   and a host that speaks the protocol is told on every change, so the strip is for the third
+   case: a page drawn inside something that never asked for a document and can redraw over it
+   whenever it likes. */
+function paintRisk(){
+  var strip = document.getElementById('risk');
+  var exposed = !topLevel && !inHost() && canSave() && view !== 'compare';
+  strip.hidden = !exposed;
+  if(!exposed) return;
+  document.getElementById('risk-txt').innerHTML = '<b>Not saved.</b> The app around this page ' +
+    'can close or redraw it without asking, and the browser\'s unsaved-work warning does not ' +
+    'reach inside a frame. ' +
+    (CAN_KEEP ? 'A copy is kept here and offered back when the page is drawn again \u2014 ' +
+                'anywhere else, only what you take out now.'
+              : 'This frame has no storage either, so what is on the screen is the only copy.');
+  document.getElementById('risk-save').textContent = (SAVE_LABEL || 'Save') + ' now';
+}
 function paintStart(){
   var r = docs[activeDoc];
   document.getElementById('start').hidden = !(isSample(r) && view === 'markup');
@@ -2694,6 +2721,8 @@ function paintStatus(){
   document.getElementById('sver').textContent = 'v' + VERSION;
   paintTracking();
   paintStart();
+  paintRisk();
+  scheduleDraft();
   document.getElementById('docmeta').textContent = open ? open + ' to review' : 'all clear';
   document.getElementById('btn-undo').disabled = history.length === 0;
   document.getElementById('btn-all-yes').disabled = !open || view === 'compare';
@@ -3913,6 +3942,7 @@ document.getElementById('btn-all-yes').addEventListener('click', function(){
   });
 });
 document.getElementById('btn-all-no').addEventListener('click', function(){ flushEditor(); resolveAll('reject'); toast('All rejected'); });
+document.getElementById('risk-save').addEventListener('click', function(){ saveFile(); });
 document.getElementById('btn-track').addEventListener('click', function(){ setTracking(!tracking); });
 document.getElementById('btn-undo').addEventListener('click', undo);
 
@@ -4703,11 +4733,115 @@ function clearDrop(){ dragDepth = 0; if(veilEl){ veilEl.remove(); veilEl = null;
 
 window.addEventListener('beforeunload', function(ev){
   syncRecord();
+  writeDraft();
   var anyDirty = isDirty() || docs.some(function(r, i){ return i !== activeDoc && r.src !== r.savedSrc; });
   if(!anyDirty && openCell === null && insertAt === null) return;
   ev.preventDefault();
   ev.returnValue = '';
 });
+
+/* ===================== the copy that survives =====================
+ *
+ * beforeunload is a request, and only a top-level page gets to make it. A page inside
+ * something else is simply removed: the host that drew it redraws, the frame goes, and
+ * `pagehide` is the first and last the page hears of it — too late to ask, early enough to
+ * write. So every unsaved document is kept in localStorage as it is edited, and offered back
+ * the next time the page opens.
+ *
+ * Two things it cannot do. A frame sandboxed without same-origin has no storage at all —
+ * localStorage throws on the first touch — and nothing can be kept there by anyone; the strip
+ * above the document says so rather than implying a safety net that is not there. And a
+ * recovered document is not a saved one: it comes back dirty, as what you had, and still has
+ * to be written somewhere.
+ */
+var DRAFT_KEY = 'cm-drafts', DRAFT_MAX = 2000000;
+var CAN_KEEP = (function(){
+  try{ localStorage.setItem('cm-t', '1'); localStorage.removeItem('cm-t'); return true; }
+  catch(e){ return false; }
+})();
+var draftTimer = null, draftLast = null;
+function draftPayload(){
+  var out = [], total = 0;
+  docs.forEach(function(r, i){
+    var src = i === activeDoc ? doc.src : r.src, saved = i === activeDoc ? savedSrc : r.savedSrc;
+    if(isSample(r) || src === saved || !src) return;
+    if(total + src.length > DRAFT_MAX) return;   /* a document too big to keep is left out */
+    total += src.length;
+    out.push({ name: r.name, path: r.path || '', src: src, saved: saved });
+  });
+  return out.length ? JSON.stringify({ at: Date.now(), docs: out }) : '';
+}
+function writeDraft(){
+  if(!CAN_KEEP) return;
+  if(document.querySelector('.veil[data-draft]')) return;   /* it is being offered right now */
+  var s;
+  try{ s = draftPayload(); }catch(e){ return; }
+  if(s === draftLast) return;
+  try{
+    /* Clearing is only ever this session clearing up after itself. A session that has had
+       nothing unsaved in it leaves last time's copy alone — otherwise opening the page and
+       reading for a minute would throw away the thing it is there to protect. */
+    if(s) localStorage.setItem(DRAFT_KEY, s);
+    else if(draftLast) localStorage.removeItem(DRAFT_KEY);
+  }catch(e){}                                   /* out of quota: the strip still warns */
+  draftLast = s;
+}
+function scheduleDraft(){
+  if(!CAN_KEEP) return;
+  if(draftTimer) clearTimeout(draftTimer);
+  draftTimer = setTimeout(function(){ draftTimer = null; syncRecord(); writeDraft(); }, 700);
+}
+/* The last moment a page inside a host is given. visibilitychange comes first and is the one
+   that fires when a tab is swapped away on a phone; pagehide is the frame being torn out. */
+window.addEventListener('pagehide', function(){ syncRecord(); writeDraft(); });
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden'){ syncRecord(); writeDraft(); }
+});
+function readDraft(){
+  if(!CAN_KEEP) return null;
+  var s = null;
+  try{ s = localStorage.getItem(DRAFT_KEY); }catch(e){ return null; }
+  if(!s) return null;
+  try{
+    var d = JSON.parse(s);
+    if(!d || !d.docs || !d.docs.length) return null;
+    return d;
+  }catch(e){ return null; }
+}
+function dropDraft(){
+  draftLast = '';
+  try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+}
+function offerDraft(){
+  var d = readDraft();
+  if(!d) return;
+  var when = new Date(d.at), now = new Date();
+  var stamp = (when.toDateString() === now.toDateString() ? '' : shortDate(when.getTime() / 1000) + ', ') +
+    when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  var list = d.docs.map(function(x){ return esc(x.name); }).join(', ');
+  var v = openPanel({
+    narrow: true,
+    title: 'Unsaved work from last time',
+    body: '<p class="hint">Marked up at <b>' + esc(stamp) + '</b> and never written to a file. ' +
+          'Bringing it back opens it as it was, still unsaved.</p>' +
+          '<p class="hint"><b>' + list + '</b></p>',
+    foot: '<button type="button" class="btn" data-x="drop">Discard</button>' +
+          '<button type="button" class="btn primary" data-x="take">Bring it back</button>'
+  });
+  v.setAttribute('data-draft', '1');
+  v.querySelector('[data-x="drop"]').addEventListener('click', function(){ v.remove(); dropDraft(); });
+  v.querySelector('[data-x="take"]').addEventListener('click', function(){
+    v.remove();
+    d.docs.forEach(function(x){
+      openDoc(x.src, x.name, null, x.path, 'kept:' + x.name);
+      /* it was unsaved then and it is unsaved now: Save still has to be pressed */
+      savedSrc = x.saved; syncRecord();
+    });
+    dropDraft();
+    render();
+    toast('Brought back — still not saved anywhere');
+  });
+}
 
 /* ===================== modals ===================== */
 function openPanel(opts){
@@ -4835,6 +4969,7 @@ activeDoc = 0;
 paintTitle();
 render();
 restoreFolders();
+offerDraft();
 })();
 </script>
 </body>
