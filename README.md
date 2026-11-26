@@ -773,11 +773,49 @@ starts over.
 
 ## To do
 
-Nothing is planned at the moment. Everything this list once held has been built — the panel
-mode, the blackline, taking changes across versions, merging two reviews, the browser suite,
-reading git — and the CHANGELOG says what each one turned out to need. What is left is the one
-idea that was turned down, kept because a list that records what was refused, and why, is more
-use than one that quietly drops it.
+Found in use, in the order they are worth doing.
+
+**Watch the file and say when it changed.** The page re-reads a file when you switch back to
+it, and checks on the way out that nothing moved under you — but the document you are looking
+at right now will not notice an assistant rewriting the file beneath it. A file handle gives
+`lastModified` for the price of a stat, so: look once a second, and read the text only when
+the stamp moves. With nothing of yours unsaved, reload in place and keep the scroll position
+and which blocks are open; with decisions pending, put up a strip — *the file changed on
+disk* — offering a reload or a comparison. That is as close to watching an assistant edit as
+a page without a server gets, and the gap left over is not refresh but collision: two writers,
+last one wins. The merge machinery already here (two copies reconciled against a shared
+original, conflicts becoming comments) is the honest answer when both sides have moved, rather
+than making you choose a side. Needs a file handle, so: Chrome, or the panel.
+
+**A comment box big enough to write a comment in.** It is a one-line `<input>` in a popover
+sized for a phrase. The edit form beside it already opens wide with a textarea that grows —
+the comment form should be the same box, with Enter to add and Shift+Enter for a line break.
+
+**Say what the check mark on a comment does.** A change offers ✓ and ✕, accept and reject. A
+comment offers only ✓, labelled *Resolve*, and resolving is deletion: CriticMarkup has no
+resolved state, so the mark leaves the file. Word can show both because it keeps resolved
+comments in the document, greyed out; here they are the same act, and a lone ✓ next to a
+comment reads as "agree", not "remove". Adding a ✕ that does what ✓ already does would be
+worse. Name the button for what happens — remove — and leave one of it.
+
+**A comment on a change.** Selecting text inside a suggestion and asking for a comment is
+refused today, because a comment there would have to nest inside the mark. But the file
+format already allows the other arrangement: `{>>…<<}` directly after a mark belongs to that
+mark, which is how signatures are written and how the reason under a change is already shown
+and edited. So nothing is in the way except the offer. Two places need it: *Comment* on a
+selection that falls inside a mark, and a way to add the first note to a change that has
+none — the row only lets you edit a note that already exists.
+
+**Printing.** A reviewing surface people live in ends up wanting paper: the marked-up
+document, the final text, or the blackline, with the marks legible in grey rather than colour
+and the comments as numbered notes rather than hover. No rush — recorded so it is not
+rediscovered.
+
+Everything this list once held has been built — the panel mode, the blackline, taking changes
+across versions, merging two reviews, the browser suite, reading git, a document carried in
+the page — and the CHANGELOG says what each one turned out to need. Below is the one idea
+that was turned down, kept because a list that records what was refused, and why, is more use
+than one that quietly drops it.
 
 **AI assistance in the editor — decided against,** and kept here because a list that records
 what was turned down is more use than one that quietly drops it.
