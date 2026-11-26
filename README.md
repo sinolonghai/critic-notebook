@@ -406,6 +406,13 @@ fire reliably for an iframe a host tears down, so the page has to be able to say
 decisions that would be lost. `dirty` is about unsaved edits; `open` counts suggestions nobody
 has decided on yet, which can be above zero on a document that is perfectly saved.
 
+A page inside a panel does not get the keyboard until it is clicked. Keystrokes belong to
+whichever frame has focus, so `⌘S` before the first click lands in the app around the page —
+which may well have its own use for it — and the page never hears it. One click anywhere in
+the document and the shortcuts work as they do anywhere else. Nothing can be done about this
+from in here, and nothing should be: a frame that took the keyboard on sight would be worse.
+The Save button is always there and does not need focus.
+
 While hosted, the page hides **Open folder**, **Open file**, **Save as** and the documents
 pane. Those are not merely useless when the host owns the file — opening another one would
 leave Save handing the host back something it never asked for. **Save** posts the document
@@ -860,13 +867,23 @@ and edited. So nothing is in the way except the offer. Two places need it: *Comm
 selection that falls inside a mark, and a way to add the first note to a change that has
 none — the row only lets you edit a note that already exists.
 
-**A README for three readers.** This one file is now the manual, the design notes and the
-protocol spec at once, and it is read by three people who want different halves of it:
-someone who wants to open a document and mark it up, someone who wants the panel, the git
-reader and the invariant, and an assistant that needs the exact prompts and the exact
-commands with nothing between them. Splitting it means deciding what the front page is — the
-first of those, almost certainly — and where the other two live without the design reasoning
-being lost, since the reasoning is half of why the thing is the way it is.
+**Using it, in three sections.** Still one README — the file does not want splitting, the
+chapter on using it does. Three readers want different halves of it and currently wade
+through each other's: someone who wants to open a document and mark it up, someone who wants
+the panel, the git reader, comparing versions and the invariant, and an assistant, which
+wants the prompts and the commands exactly and nothing in between. So: **Using it**,
+**Going further**, **For an assistant**, in that order, with the design reasoning staying
+where it is — it is half of why the thing is the way it is, and it belongs to the chapters
+that explain each piece, not to a section of its own.
+
+**Say why the shortcuts are dead before the first click.** In a panel the page does not have
+the keyboard until something in it is clicked, so `⌘S` goes to the app around it and nothing
+happens here — which reads as the shortcut being broken rather than as the page not being
+listening yet. The focus rule itself is not ours to change and should not be: a frame that
+grabbed the keyboard on sight would be worse. What is ours is saying so, once, where it will
+be read — a hint on the first keystroke the page does hear, or a line in the strip that
+already appears over unsaved work in a frame. Small, and only worth doing in a frame, where
+it is the one thing the page cannot do for you.
 
 **Printing.** A reviewing surface people live in ends up wanting paper: the marked-up
 document, the final text, or the blackline, with the marks legible in grey rather than colour
