@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.15.0** · [changelog](CHANGELOG.md)
+**0.16.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -191,6 +191,7 @@ that block.
 | Edit or delete a comment | Click the comment text; empty it to remove it |
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Edit without recording it | **Tracking on** in the status strip — click to turn it off |
+| Re-read the file something else just rewrote | **Refresh** in the toolbar |
 | Get unsaved work back after a crash or a host closing the page | It is offered on the next open |
 | Put a document in front of someone who cannot reach your browser | `node tools/carry.mjs file.md` |
 | Undo anything | `⌘Z` (80 steps) |
@@ -367,7 +368,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.15.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.16.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -856,9 +857,8 @@ starts over.
 
 Found in use, in the order they are worth doing.
 
-**Watch the file and say when it changed.** The page re-reads a file when you switch back to
-it, and checks on the way out that nothing moved under you — but the document you are looking
-at right now will not notice an assistant rewriting the file beneath it. A file handle gives
+**Notice on its own that the file changed.** **Refresh** is in, so the file can be re-read
+without leaving the document; what is left is not having to ask. A file handle gives
 `lastModified` for the price of a stat, so: look once a second, and read the text only when
 the stamp moves. With nothing of yours unsaved, reload in place and keep the scroll position
 and which blocks are open; with decisions pending, put up a strip — *the file changed on

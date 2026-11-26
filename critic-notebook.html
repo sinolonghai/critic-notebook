@@ -294,6 +294,9 @@ a.btn{display:inline-block;color:inherit;text-decoration:none;line-height:1.55}
 .out li{margin:.22em 0}
 .out blockquote{margin:0 0 .6em;padding:.1em 0 .1em 1em;border-left:3px solid var(--rule-strong);color:var(--ink-soft)}
 .out hr{border:0;border-top:1px solid var(--rule);margin:.9em 0}
+/* a rule on its own is a few pixels of line; this gives the block something to aim at */
+.cell.k-hr .out{padding:10px 0}
+.cell.k-hr .out hr{margin:0}
 .out code{font-family:var(--mono);font-size:.84em;background:var(--surface-2);padding:.12em .36em;border-radius:4px}
 .out .md-pre{font-family:var(--mono);font-size:.78em;line-height:1.6;background:var(--surface-2);
   border:1px solid var(--rule);border-radius:8px;padding:11px 13px;overflow-x:auto;margin:0}
@@ -609,6 +612,7 @@ a.btn{display:inline-block;color:inherit;text-decoration:none;line-height:1.55}
       <button type="button" class="btn" id="btn-undo" disabled>Undo</button>
       <button type="button" class="btn" id="btn-open">Open folder</button>
       <button type="button" class="btn" id="btn-openfile">Open file</button>
+      <button type="button" class="btn" id="btn-refresh" hidden>Refresh</button>
       <button type="button" class="btn" id="btn-saveas" hidden>Save as…</button>
       <button type="button" class="btn primary" id="btn-save">Save</button>
     </div>
@@ -681,7 +685,7 @@ a.btn{display:inline-block;color:inherit;text-decoration:none;line-height:1.55}
 (function(){
 'use strict';
 
-var VERSION = '0.15.0';
+var VERSION = '0.16.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -1098,7 +1102,12 @@ function segment(){
       add('code', L[start].o, L[i-1].o + L[i-1].s.length, true);
       continue;
     }
-    if(RE_HR.test(ln)){ add('hr', L[i].o, L[i].o + ln.length, true); i++; continue; }
+    /* A rule was locked, on the grounds that there is nothing in it to edit. But it is one
+       short line of plain text, it tracks like any other, and people want to move it, retype
+       it or take it out — and a locked block refuses in silence, which reads as the page
+       being broken rather than as a decision. Its row is also seven pixels tall, so the
+       stylesheet gives this one room to be clicked. */
+    if(RE_HR.test(ln)){ add('hr', L[i].o, L[i].o + ln.length, false); i++; continue; }
     if(RE_PHLINE.test(ln)){ add('blockmark', L[i].o, L[i].o + ln.length, false); i++; continue; }
     if(RE_H.test(ln)){ add('heading', L[i].o, L[i].o + ln.length, false); i++; continue; }
     if(isTableHead(L, i)){
@@ -2450,7 +2459,7 @@ function cellBody(idx){
 function cellHtml(idx){
   var cell = doc.cells[idx];
   var mks = cellMarks(cell);
-  var cls = 'cell' + (cell.locked ? ' locked' : ' editable') +
+  var cls = 'cell k-' + cell.kind + (cell.locked ? ' locked' : ' editable') +
             (openCell === idx ? ' open' : '') + (mks.length ? ' touched' : '');
   var flag = '';
   if(mks.length && view !== 'markup'){
@@ -2665,6 +2674,9 @@ function sampleHint(){
                             : 'Nothing to save yet \u2014 mark the tutorial up and this takes the text out';
 }
 function paintSaveState(){
+  var rf = document.getElementById('btn-refresh'), rr = docs[activeDoc];
+  rf.hidden = !(rr && rr.handle);
+  if(!rf.hidden) rf.title = 'Read ' + rr.name + ' again from disk, in case something else wrote it';
   var b = document.getElementById('btn-save'), r = docs[activeDoc];
   b.disabled = !canSave();
   b.title = (isSample(r) && !canSave()) ? sampleHint()
@@ -4003,6 +4015,7 @@ document.getElementById('btn-all-yes').addEventListener('click', function(){
 });
 document.getElementById('btn-all-no').addEventListener('click', function(){ flushEditor(); resolveAll('reject'); toast('All rejected'); });
 document.getElementById('risk-save').addEventListener('click', function(){ saveFile(); });
+document.getElementById('btn-refresh').addEventListener('click', refreshDoc);
 document.getElementById('btn-track').addEventListener('click', function(){ setTracking(!tracking); });
 document.getElementById('btn-undo').addEventListener('click', undo);
 
@@ -4086,9 +4099,13 @@ function paintTitle(){
   el.textContent = shortPath(full, 72);
   el.title = full;
 }
-function activate(i){
-  if(i === activeDoc) return;
-  syncRecord();
+/* `force` reloads the record that is already active, for Refresh. It also skips the sync:
+   syncRecord copies what is in memory back into the record, and on a reload the record is
+   the authority — syncing first would put the stale copy straight back over the text just
+   read from the file, which is what it did until this was written down. */
+function activate(i, force){
+  if(i === activeDoc && !force) return;
+  if(!force) syncRecord();
   activeDoc = i;
   var r = docs[i];
   doc = parse(r.src);
@@ -4666,6 +4683,54 @@ function deniedHere(e){
     paintStatus(); paintDocList(); paintStart();
   }
   return true;
+}
+/* Re-read the file now. Nothing locks a file while the page holds it — another editor, a
+   sync client, the assistant that was asked to rewrite it — and the page only looked on the
+   way into a document, so the one you were already reading could move on underneath you
+   unnoticed. This is the asking-for-it version; noticing by itself is the next job. */
+function refreshDoc(){
+  var r = docs[activeDoc];
+  if(!r || !r.handle){ toast('No file behind this document to re-read'); return; }
+  flushEditor();
+  var keep = center.scrollTop;
+  r.handle.getFile().then(function(f){ return f.text(); }).then(function(t){
+    var now = normDisk(t);
+    r.diskText = now; diskText = now;
+    /* The record is only brought up to date by syncRecord, so for the document in front of
+       you the live state is the authority — asking the record whether anything is unsaved
+       gets the answer it had before you typed. */
+    if(now === savedSrc){ toast('No change on disk'); return; }
+    if(!isDirty()){
+      /* nothing of yours to lose: take what the file says, and stay where you were reading */
+      adoptText(r, t);
+      activate(activeDoc, true);
+      center.scrollTop = keep;
+      toast(r.name + ' changed on disk — reloaded');
+      return;
+    }
+    /* both sides have moved; the choice is the reader's, and it is not a small one */
+    var v = openPanel({
+      narrow: true,
+      title: 'The file changed on disk',
+      body: '<p class="hint">' + esc(r.name) + ' has been written by something else since you ' +
+            'read it, and this copy has changes of its own that are not saved. Reloading takes ' +
+            'the file as it now stands and your unsaved work here is gone. Keeping yours leaves ' +
+            'the file alone — saving later will ask again.</p>',
+      foot: '<button type="button" class="btn" data-x="mine">Keep mine</button>' +
+            '<button type="button" class="btn primary" data-x="reload">Reload from disk</button>'
+    });
+    v.querySelector('[data-x="mine"]').addEventListener('click', function(){ v.remove(); });
+    v.querySelector('[data-x="reload"]').addEventListener('click', function(){
+      v.remove();
+      adoptText(r, t);
+      activate(activeDoc, true);
+      center.scrollTop = keep;
+      toast('Reloaded from disk');
+    });
+  }).catch(function(e){
+    if(deniedHere(e)) toast('This page is not allowed to read that file again here');
+    else toast('Could not re-read ' + r.name);
+  });
 }
 function paintCapabilities(){
   document.getElementById('btn-open').hidden = !CAN_DIR;

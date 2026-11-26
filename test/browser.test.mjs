@@ -417,6 +417,71 @@ scenario('tracking-off', async (browser) => {
   await ctx.close(); proc.kill();
 });
 
+/* Refresh: the file the reader is already looking at, read again on demand. Switching
+   documents re-read a file; staying in one did not, so an assistant rewriting it underneath
+   went unnoticed until the next save asked about it. Also here: a rule — a bare `---` — was
+   locked and refused to open, in silence, which read as the page being broken. */
+scenario('refresh', async (browser) => {
+  const ctx = await browser.newContext({ viewport: { width: 1100, height: 800 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto(instrumented()); await sleep(900);
+
+  await p.evaluate(() => {
+    window.__disk = { 'A.md': 'The paragraph as it was.\n\n---\n\nAfter a rule.\n' };
+    window.__T.useFiles([{ key: 'f/A.md', name: 'A.md', path: 'A.md', count: 0, scanned: true,
+      handle: { name: 'A.md',
+        getFile: () => Promise.resolve(new File([window.__disk['A.md']], 'A.md')),
+        createWritable: () => Promise.resolve({
+          write: t => { window.__disk['A.md'] = t; return Promise.resolve(); },
+          close: () => Promise.resolve() }) } }]);
+  });
+  await sleep(300);
+  await p.click('.doc-row[data-key="f/A.md"]'); await sleep(500);
+
+  ok(!(await p.evaluate(() => document.getElementById('btn-refresh').hidden)),
+     'a document with a file behind it offers Refresh');
+
+  /* a rule is a block like any other now: it opens, and it is tall enough to hit */
+  const rule = await p.locator('.cell.k-hr .out').boundingBox();
+  ok(rule && rule.height >= 16, 'a rule has a row you can aim at — ' +
+     (rule ? Math.round(rule.height) + 'px' : 'no rule cell'));
+  await p.mouse.click(rule.x + rule.width / 2, rule.y + rule.height / 2); await sleep(400);
+  ok(await p.evaluate(() => { const t = document.getElementById('edbox'); return !!t && t.value === '---'; }),
+     'clicking it opens it, holding the rule itself');
+  await p.keyboard.press('Escape'); await sleep(300);
+
+  /* nothing of the reader's is unsaved, so Refresh just takes what the file says */
+  await p.evaluate(() => { window.__disk['A.md'] = 'Rewritten by the assistant.\n\n---\n\nAfter a rule.\n'; });
+  await p.click('#btn-refresh'); await sleep(600);
+  ok((await p.evaluate(() => window.__T.src())).includes('Rewritten by the assistant'),
+     'Refresh reads the file again without having to leave the document');
+
+  /* with work of the reader's own in it, Refresh asks rather than reading over it */
+  await p.evaluate(() => { const c = document.querySelector('.out[data-cell]'); if(c) c.click(); });
+  await sleep(400);
+  await p.evaluate(() => { const t = document.getElementById('edbox');
+    t.value = 'A sentence of my own.'; t.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.evaluate(() => document.getElementById('nb').click()); await sleep(500);
+  await p.evaluate(() => { window.__disk['A.md'] = 'And rewritten again.\n\n---\n\nAfter a rule.\n'; });
+  await p.click('#btn-refresh'); await sleep(600);
+  ok(!!(await p.$('[data-x="reload"]')), 'with unsaved work it asks first');
+  await p.click('[data-x="mine"]'); await sleep(400);
+  let now = await p.evaluate(() => window.__T.src());
+  /* the edit is on disk-shaped text as word-level marks, so look for the marks, not a sentence */
+  ok(/\{~~\w+~>\w+~~\}/.test(now) && !/rewritten again/i.test(now),
+     'keeping mine leaves the file alone and the work where it was — ' + JSON.stringify(now.slice(0, 48)));
+
+  await p.click('#btn-refresh'); await sleep(500);
+  await p.click('[data-x="reload"]'); await sleep(500);
+  now = await p.evaluate(() => window.__T.src());
+  ok(/And rewritten again/.test(now) && !/\{~~/.test(now),
+     'and reloading takes the file, as it says it will');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close();
+});
+
 /* A review done in somebody else's side panel — a chat app showing the page in a frame it
    owns. The frame is removed without asking, which is what happened to a real review: there
    is no beforeunload for a page inside another page. What the page can do is say so while

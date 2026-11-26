@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.16.0 — 2026-11-26
+
+- **Refresh.** The page read a file again when you switched back to it, but the document in
+  front of you was never looked at twice, so an assistant rewriting it underneath went
+  unnoticed until the next save asked an awkward question. **Refresh** reads it now, on
+  demand, and keeps you where you were reading. With nothing of yours unsaved it simply takes
+  what the file says; with work of your own in it, it asks — reload and lose yours, or keep
+  yours and leave the file alone. The button appears only for a document with a file behind
+  it, since there is nothing to re-read otherwise. Noticing without being asked is the next
+  job on the list.
+- **A horizontal rule can be edited.** `---` on its own was locked, like a code block, on the
+  grounds that a rule has nothing in it to edit — but it is one short line of text, it tracks
+  like any other, and a locked block refuses in silence, which reads as the page being broken
+  rather than as a decision. Its row was also seven pixels tall; it now has something to aim
+  at.
+- Two bugs found underneath that one. Reloading the document already in front of you went
+  through `activate`, which returned early for the index it was already on — and when told to
+  go anyway, its first act was to copy what was in memory back over the text just read from
+  the file. And `Refresh` asked the record whether anything was unsaved, which answers for the
+  state before you typed; for the open document the live state is the authority.
+
 ## 0.15.0 — 2026-11-26
 
 - **A frame is asked whether it can save, instead of being assumed unable to.** The page used
