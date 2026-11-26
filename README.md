@@ -843,6 +843,21 @@ than making you choose a side. Needs a file handle, so: Chrome, or the panel.
 sized for a phrase. The edit form beside it already opens wide with a textarea that grows —
 the comment form should be the same box, with Enter to add and Shift+Enter for a line break.
 
+**Ask whether a frame can save, rather than assuming it cannot.** The page decides what Save
+can do by *position* — `window.self === window.top` — and treats every frame as unable to
+write a file. Measured, that is wrong: `showSaveFilePicker` is present inside frames too,
+sandboxed ones included, and a blob URL can always be made. What varies is whether the call
+is *allowed*: a cross-origin frame has the File System Access API denied by permissions
+policy, a frame without `allow-downloads` has its downloads blocked, and a frame that is
+neither may be able to do both. So a host that would have let the page write a file never
+gets asked, and the reviewer is sent to copy text by hand for no reason — which is the
+likeliest explanation for the same page saving properly in one assistant's panel and not in
+another's. The fix is to try rather than to presume: call the picker and fall back to the
+copy panel when it throws, and offer a download link inside that panel, where a click of the
+reader's own is the best chance a sandbox will allow and the text is sitting there if it is
+not. Position stays the right test for one thing only — `Save as`, which has nowhere to go
+without a picker.
+
 **Copy should put text on the clipboard, not the page.** Copying from the document and
 pasting into another editor brings the page's own styling with it — in dark mode that is
 near-white type, which lands on a white page as barely-readable grey; in light mode anything
