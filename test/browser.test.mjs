@@ -436,6 +436,18 @@ scenario('torn-out', async (browser) => {
   await p.evaluate(() => mk()); await sleep(1200);
   let fr = p.frames().find(f => f.url().endsWith('page.html'));
 
+  /* inside a frame there is no file picker and no download, so Save is Copy and Save as is
+     not there at all — which makes Copy the only way anything leaves, and it has to be
+     reachable rather than greyed out with a tooltip pointing at a button that is missing */
+  const bar = await fr.evaluate(() => ({
+    buttons: [...document.querySelectorAll('.bar button')].filter(b => b.offsetParent !== null)
+      .map(b => b.textContent.trim() + (b.disabled ? '(off)' : '')),
+    title: document.getElementById('btn-save').title }));
+  ok(bar.buttons.includes('Copy(off)') && !bar.buttons.some(b => /^Save/.test(b)),
+     'in a frame the page offers Copy, not Save — ' + JSON.stringify(bar.buttons.slice(-3)));
+  ok(!/Save as/.test(bar.title),
+     'and its tooltip does not point at a Save as that is not there — ' + JSON.stringify(bar.title));
+
   const strip = () => fr.evaluate(() => { const e = document.getElementById('risk');
     return e && !e.hidden ? e.textContent.replace(/\s+/g, ' ').trim() : null; });
 
@@ -513,7 +525,7 @@ scenario('carried', async (browser) => {
   const got = await p.evaluate(() => document.querySelector('.cell') &&
     [...document.querySelectorAll('.cell')].map(c => c.textContent).join('\n'));
   ok(/Hanshu/.test(got) && !/Han shu/.test(got), 'rejecting all gives the original wording back');
-  ok(state.saveDisabled, 'it arrives as a saved document, with nothing to write yet');
+  ok(!state.saveDisabled, 'and it can be written out from the start — there is no file behind it');
 
   ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();

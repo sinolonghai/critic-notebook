@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.1 — 2026-11-25
+
+- **Inside a frame, the way out was greyed out.** There is no file picker and no download
+  there, so Save as is not shown and Save is Copy — and Copy was disabled until something
+  changed, which meant a document carried in the page could not be taken out of it at all.
+  A document with no file behind it — carried, pasted, a blackline, a file read through the
+  old file input — can now be written out whenever you like, dirty or not: there is nothing
+  for it to match, and in a frame what is on the screen is the only copy.
+- A tutorial marked up inside a frame can be copied out too, and the tooltips stop pointing
+  at a *Save as* that is not on the screen.
+- The unsaved-work strip now appears for real unsaved edits rather than for any document
+  without a file, so a carried document no longer opens under a warning.
+
 ## 0.14.0 — 2026-11-25
 
 - **A document can ride inside the page.** Append

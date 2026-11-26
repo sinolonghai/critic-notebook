@@ -667,7 +667,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.14.0';
+var VERSION = '0.14.1';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -2632,22 +2632,33 @@ function editorPending(){
 function isSample(r){ return !!r && r.key === 'sample'; }
 function canSave(){
   var r = docs[activeDoc];
-  /* a blackline is scratch too, but saving it is exactly what it is for: Save offers the
-     dialog. Only the tutorial has nothing worth writing. */
-  if(!r || isSample(r)) return false;
-  /* and a document that is no file yet always has something to write, dirty or not — there
-     is nothing on disk for it to match */
-  if(r.scratch) return true;
+  if(!r) return false;
+  /* The tutorial is a scratch pad kept by Save as. Inside a frame there is no Save as — no
+     file picker, no download — so the one way anything leaves is Copy, and a tutorial you
+     have marked up has to be able to take it. */
+  if(isSample(r)) return !CAN_FS && !CAN_DL && isDirty();
+  /* A document with nothing on disk behind it always has something worth taking out, dirty
+     or not: a blackline, a paste, a document carried in the page, a file read through the
+     old file input. There is nothing for it to match, and in a frame the copy on the screen
+     is the only copy there is. A host is the exception — it has the text already. */
+  if(!inHost() && (r.scratch || !r.handle)) return true;
   return isDirty() || editorPending();
+}
+/* What to say about the tutorial, which depends on what this browser can do with it: keep it
+   as a file where there is a Save as, and otherwise take its text out once there is any. */
+function sampleHint(){
+  return (CAN_FS || CAN_DL) ? 'The tutorial is a scratch pad — use \u201cSave as\u201d to keep it'
+                            : 'Nothing to copy yet \u2014 mark the tutorial up and this takes the text out';
 }
 function paintSaveState(){
   var b = document.getElementById('btn-save'), r = docs[activeDoc];
   b.disabled = !canSave();
-  b.title = isSample(r) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
-    : (r && r.scratch && canSave()) ? 'Write it to a file (' + MOD + 'S)'
+  b.title = (isSample(r) && !canSave()) ? sampleHint()
     : !canSave() ? 'No changes to save'
     : inHost() ? 'Hand the document back (' + MOD + 'S)'
-    : CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Download the .md (' + MOD + 'S)' : 'Copy the markdown (' + MOD + 'S)';
+    : CAN_FS ? ((r && r.handle) ? 'Write the file (' + MOD + 'S)' : 'Write it to a file (' + MOD + 'S)')
+    : CAN_DL ? 'Download the .md (' + MOD + 'S)'
+    : 'Copy the whole document out (' + MOD + 'S) — a page in a frame cannot write files';
 }
 /* Who will warn you, and whether anything is being kept. A top-level page has beforeunload
    and a host that speaks the protocol is told on every change, so the strip is for the third
@@ -2655,7 +2666,7 @@ function paintSaveState(){
    whenever it likes. */
 function paintRisk(){
   var strip = document.getElementById('risk');
-  var exposed = !topLevel && !inHost() && canSave() && view !== 'compare';
+  var exposed = !topLevel && !inHost() && (isDirty() || editorPending()) && view !== 'compare';
   strip.hidden = !exposed;
   if(!exposed) return;
   document.getElementById('risk-txt').innerHTML = '<b>Not saved.</b> The app around this page ' +
@@ -3958,8 +3969,7 @@ document.addEventListener('keydown', function(ev){
     ev.preventDefault();
     if(canSave()){ saveFile(); return; }
     var r = docs[activeDoc];
-    toast(isSample(r) ? 'The tutorial is a scratch pad — use “Save as” to keep it'
-                      : 'No changes to save');
+    toast(isSample(r) ? sampleHint() : 'Nothing to save');
     return;
   }
   if((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z' && !inBox &&
@@ -5006,7 +5016,8 @@ function startDocs(){
     var carried = inlineDocs();
     if(carried.length) carried.forEach(function(c){
       var src = c.text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-      docs.push({ key: 'inline:' + c.name, name: c.name, path: '', label: c.name,
+      /* scratch: it is a document, but there is no file behind it anywhere */
+      docs.push({ key: 'inline:' + c.name, name: c.name, path: '', label: c.name, scratch: true,
                   src: src, savedSrc: src, handle: null, history: [], scrollTop: 0 });
     });
     else docs.push({ key: 'sample', name: 'tutorial.md', path: '', label: 'tutorial.md',
