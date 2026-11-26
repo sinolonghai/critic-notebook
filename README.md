@@ -451,9 +451,12 @@ the text must not be indented, since four spaces is a code block and this is the
 and a closing script tag anywhere inside it has to be written with the slash escaped, as
 above, or it ends the tag early. The page turns that escape back on the way in.
 
-What a carried document cannot do is write back. Inside a frame there is no file picker and
-no download, so **Save as** is not offered and **Save** hands you the marked-up text to copy
-over your own file. That button is the only way anything leaves, and it is enabled from the
+Where it is opened decides what Save can do, and the file is the same either way. Opened as
+its own browser tab — double-clicked in a file manager — it is an ordinary page: **Save** puts
+up a file dialog and writes a real `.md`. Shown inside something else, in a chat panel or a
+canvas, it is in a frame, where there is no file picker and no download at all: **Save as** is
+not offered and **Save** hands you the marked-up text to copy over your own file. So if you
+want a file out of a carried document, open it rather than view it. That button is the only way anything leaves, and it is enabled from the
 start, because there is no file behind a carried document for it to match. To close the loop
 instead of copying by hand, use `tools/panel.mjs` on the machine the browser is on.
 
