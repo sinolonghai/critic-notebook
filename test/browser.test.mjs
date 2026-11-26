@@ -474,6 +474,51 @@ scenario('torn-out', async (browser) => {
   await ctx.close();
 });
 
+/* A page built to carry its own documents, by the tool that builds one. This is the way in
+   for whoever can write a file but cannot reach the browser it will be opened in, so what
+   matters is that the document arrives whole: a closing script tag inside it must survive,
+   and the tutorial must get out of the way. */
+scenario('carried', async (browser) => {
+  const a = fixture('carried-abstract.md',
+    '# Abstract\n\nTiaozhi appears in the {~~Hanshu~>Han shu~~}{>>@ann<<}.\n\n' +
+    '```js\nconsole.log("</script>")\n```\n');
+  const b2 = fixture('carried-ch1.md', '# Chapter one\n\nThe second document.\n');
+  const out = path.join(TMP, 'carried.html');
+  execFileSync(process.execPath, [path.join(ROOT, 'tools', 'carry.mjs'), a, b2, '-o', out]);
+
+  const ctx = await browser.newContext({ viewport: { width: 1000, height: 800 } });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.goto('file://' + out); await sleep(1200);
+
+  const state = await p.evaluate(() => ({
+    title: document.getElementById('docname').textContent,
+    rows: [...document.querySelectorAll('.doc-row')].map(r => r.getAttribute('data-key')),
+    first: (document.querySelector('.cell') || {}).textContent || '',
+    code: (document.querySelector('pre') || {}).textContent || '',
+    marks: document.querySelectorAll('.mk').length,
+    saveDisabled: document.getElementById('btn-save').disabled
+  }));
+  ok(state.title === 'carried-abstract.md', 'the page opens on the document it carries — ' +
+     JSON.stringify(state.title));
+  ok(!state.rows.includes('sample'), 'and the tutorial is not loaded over it');
+  ok(state.rows.length === 2, 'both documents are there — ' + JSON.stringify(state.rows));
+  ok(/Abstract/.test(state.first), 'the text is the document, not the sample');
+  ok(state.marks === 1, "the reviewer's suggestion came through as a mark");
+  ok(/console\.log\("<\/script>"\)/.test(state.code),
+     'a closing script tag inside the document survives the trip — ' + JSON.stringify(state.code));
+
+  /* rejecting everything has to give back the file the tool was handed, byte for byte */
+  await p.evaluate(() => document.getElementById('btn-all-no').click()); await sleep(500);
+  const got = await p.evaluate(() => document.querySelector('.cell') &&
+    [...document.querySelectorAll('.cell')].map(c => c.textContent).join('\n'));
+  ok(/Hanshu/.test(got) && !/Han shu/.test(got), 'rejecting all gives the original wording back');
+  ok(state.saveDisabled, 'it arrives as a saved document, with nothing to write yet');
+
+  ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+  await ctx.close();
+});
+
 /* The controls between blocks, the confirmation, and what joining writes. */
 scenario('join', async (browser) => {
   const ORIG = '# A heading\n\nFirst paragraph, which ends here.{>>@hai: check this<<}\n\n' +

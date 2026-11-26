@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.13.0** · [changelog](CHANGELOG.md)
+**0.14.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -192,6 +192,7 @@ that block.
 | Accept / reject a suggestion | `✓` / `✕` on the row under its block |
 | Edit without recording it | **Tracking on** in the status strip — click to turn it off |
 | Get unsaved work back after a crash or a host closing the page | It is offered on the next open |
+| Put a document in front of someone who cannot reach your browser | `node tools/carry.mjs file.md` |
 | Undo anything | `⌘Z` (80 steps) |
 | Save | `⌘S` — greyed out when there is nothing to write |
 | Save to a new file | `Save as…` |
@@ -366,7 +367,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.13.0' }
+page → host   { type: 'ready', protocol: 1, version: '0.14.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -416,6 +417,38 @@ document rather than assuming it landed; and `ask` / `suggest`, which would let 
 paragraph, send it to the assistant for a rewrite, and have the result arrive in that block —
 removing the copy and the paste that are otherwise the one manual step in the loop.
 
+### A document carried in the page
+
+The host protocol needs a host, and `tools/panel.mjs` needs to run on the machine the browser
+is on. Neither is true of an assistant working in a container of its own, or a chat app that
+renders HTML in a canvas: it can write a file or publish a page, but it cannot reach your
+browser. For that case the document rides inside the page.
+
+```sh
+node tools/carry.mjs abstract.md                   # → abstract.review.html
+node tools/carry.mjs ch1.md ch2.md -o review.html  # first one in front
+```
+
+The result is one self-contained file that comes up showing the document instead of the
+tutorial. What the tool does is small enough to do by hand — append this before `</body>`:
+
+```html
+<script type="text/markdown" data-name="abstract.md">
+# Abstract
+…
+<\/script>
+```
+
+Several of them open as several documents, in the order they appear. Two things to get right:
+the text must not be indented, since four spaces is a code block and this is the document;
+and a closing script tag anywhere inside it has to be written with the slash escaped, as
+above, or it ends the tag early. The page turns that escape back on the way in.
+
+A carried document arrives as a *saved* document — nothing to write until you change
+something. What it cannot do is write back: a page opened from a file, or inside somebody's
+sandbox, has nowhere to save to, so Save is Copy and the marked-up text comes back by hand.
+To close the loop, use `tools/panel.mjs` on the machine the browser is on.
+
 ### From the command line
 
 `tools/panel.mjs` is the protocol's second host, and the first meant for daily use. It is how
@@ -444,6 +477,14 @@ whose code runs in its own cloud sandbox — ChatGPT's included — cannot open 
 reach your files, so there you are the one who runs the command, and the assistant's part is
 only to write the marked-up file. An assistant that works in your filesystem — Claude Code,
 WorkBuddy, Copilot in an editor — can run it for you.
+
+A shell that can write your files is still not always the same machine as your browser. Some
+of them reach your disk through a mounted folder from a small Linux VM running on your
+computer: files land where you expect, but `127.0.0.1` there is the VM's loopback, and a
+server started on it is not the one your browser can open — `--no-open` and a pasted URL do
+not help, it is the same loopback. The test is not whether the assistant can write your files
+but whether it *is* your machine: `uname -s` saying Linux on a Mac settles it. When it is not,
+you run `panel.mjs` yourself, or the document comes to you carried in the page, above.
 
 Below 880 pixels the top bar folds to two rows and loses what a panel has no use for: the
 label on the signing name, the "5 to review" count that the status line below repeats, and —

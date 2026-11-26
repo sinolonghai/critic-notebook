@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.14.0 — 2026-11-25
+
+- **A document can ride inside the page.** Append
+  `<script type="text/markdown" data-name="x.md">…<\/script>` to the file and the page opens
+  on that document instead of the tutorial; several of them open as several documents.
+  `tools/carry.mjs` writes such a copy from one or more markdown files.
+- This is the third way in, and it is for the case the other two do not reach: something that
+  can write a file or publish a page but cannot touch the browser it will be read in — an
+  assistant in a container of its own, a chat app rendering HTML in a canvas. A carried
+  document arrives as a saved one, and saving from there is a copy, not a file; closing the
+  loop still wants `tools/panel.mjs`, which has to run where the browser is.
+- The scan waits for the rest of the page, so the document can be appended at the end, where
+  it is natural to put it; a host that got in first with `open` keeps what it sent.
+- A `carried` scenario builds a page with the tool and reads it back, closing script tag in a
+  code fence and all.
+
 ## 0.13.0 — 2026-11-19
 
 - **Unsaved work is kept, and said out loud.** A page at the top of a tab gets to ask before

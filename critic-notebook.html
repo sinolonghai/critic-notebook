@@ -667,7 +667,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.13.0';
+var VERSION = '0.14.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -4963,13 +4963,66 @@ function setPane(which, on){
   });
 })();
 
-docs.push({ key: 'sample', name: 'tutorial.md', path: '', label: 'tutorial.md', scratch: true,
-            src: SAMPLE, savedSrc: SAMPLE, handle: null, history: [], scrollTop: 0 });
-activeDoc = 0;
-paintTitle();
-render();
-restoreFolders();
-offerDraft();
+/* ============ a document carried in the page ============
+ *
+ * The third way in, after a file picker and a host. Something that can write a file or
+ * publish a page, but cannot reach the browser this will be read in — an assistant on the
+ * other side of a container boundary, a chat app's canvas — copies the page and appends the
+ * document to it:
+ *
+ *     <script type="text/markdown" data-name="abstract.md">
+ *     # Abstract
+ *     ...
+ *     <\/script>        (written here with the slash escaped, for the reason below)
+ *
+ * The browser does not run an unknown script type, so the text is just sitting there to be
+ * read. Several of them open as several documents, in the order they appear, and the first
+ * is the one in front. A page carrying documents does not load the tutorial: it was made to
+ * carry these.
+ *
+ * Two things to get right when writing one. The text must not be indented — four spaces is
+ * a code block in markdown, and this is the document, not a snippet. And `</script` anywhere
+ * inside would end the tag early, so write it `<\/script`; it is turned back on the way in.
+ */
+function inlineDocs(){
+  var out = [];
+  var els = document.querySelectorAll('script[type="text/markdown"]');
+  for(var i = 0; i < els.length; i++){
+    /* the replacement is written with the slash escaped, since the plain closing tag — in a
+       string or even in this comment — ends the script element it is written in */
+    var text = (els[i].textContent || '').replace(/<\\\/script/gi, '<\/script').replace(/^\n/, '');
+    if(!text.trim()) continue;
+    var name = els[i].getAttribute('data-name') || ('document-' + (out.length + 1) + '.md');
+    out.push({ name: name, text: /\n$/.test(text) ? text : text + '\n' });
+  }
+  return out;
+}
+
+/* This script runs where it stands, so a document appended after it has not been parsed yet
+   \u2014 and appending is the natural way to add one. So the first document waits for the rest of
+   the page to arrive. A host that got in first with an `open` keeps what it sent. */
+function startDocs(){
+  if(!docs.length){
+    var carried = inlineDocs();
+    if(carried.length) carried.forEach(function(c){
+      var src = c.text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+      docs.push({ key: 'inline:' + c.name, name: c.name, path: '', label: c.name,
+                  src: src, savedSrc: src, handle: null, history: [], scrollTop: 0 });
+    });
+    else docs.push({ key: 'sample', name: 'tutorial.md', path: '', label: 'tutorial.md',
+                     scratch: true, src: SAMPLE, savedSrc: SAMPLE, handle: null,
+                     history: [], scrollTop: 0 });
+    activeDoc = 0;
+    /* the page starts parsed on the tutorial; a carried document has to be made the live one */
+    if(carried.length){ activeDoc = -1; activate(0); }
+  }
+  paintTitle();
+  render();
+  restoreFolders();
+  offerDraft();
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startDocs);
+else startDocs();
 })();
 </script>
 </body>
