@@ -500,6 +500,48 @@ the wide layout rather than a degradation of it. Hosted at 780 pixels — a pane
 there are 142 pixels above the first line of the document, where there were 189; at 420, 124
 where there were 199.
 
+### What to tell the assistant
+
+Three ways in, and which one applies is not a matter of how capable the assistant is but of
+where its shell runs. Hand it this and it can work that out for itself:
+
+```text
+You have a marked-up .md. To put it in front of me in the critic-notebook page, work out
+which of these you are — the test is where your shell runs, not whether you can reach my
+files.
+
+1. Your shell IS my machine (`uname -s` says Darwin on a Mac, not Linux). Then:
+       node <repo>/tools/panel.mjs <file.md>
+   It serves the page on 127.0.0.1, hands it the file, and Save in the page writes that
+   same file. This is the only route where the loop closes without copying by hand.
+
+2. You can write my files, but through a mounted folder from a Linux VM — which is what
+   most assistants on a Mac get, and `uname -s` saying Linux is how you know. A server you
+   start is on that VM's loopback, not on mine, so panel.mjs cannot be reached, with or
+   without --no-open. Then:
+       node <repo>/tools/carry.mjs <file.md> -o review.html
+   and tell me where review.html is. If you do not have the repository, copy
+   critic-notebook.html and append a block before </body> — flush to the left margin, with
+   the document's own lines starting in column one, since four spaces of indentation is a
+   code block in Markdown:
+
+<script type="text/markdown" data-name="file.md">
+...the whole document, not indented...
+<\/script>
+
+   Write any closing script tag inside the document with the slash escaped, the way the one
+   above is written, or it ends the tag early. Saving from a page like that is a copy, not a
+   file: I paste the result back to you.
+
+3. You cannot reach my files at all (your own cloud sandbox). Then give me the marked-up
+   markdown in the chat and I will use Paste in the left pane.
+
+Either way, check your own marks first: rejecting every one of them has to reproduce the
+file you were given, byte for byte. Where you can run the repository, that is
+`node <repo>/tools/check-markup.mjs before.md after.md`; where you cannot, do the same
+comparison in your own sandbox before handing the document over.
+```
+
 ## Comparing two versions
 
 The **Compare** tab diffs the open document against another one — a different file, or an
@@ -817,6 +859,14 @@ mark, which is how signatures are written and how the reason under a change is a
 and edited. So nothing is in the way except the offer. Two places need it: *Comment* on a
 selection that falls inside a mark, and a way to add the first note to a change that has
 none — the row only lets you edit a note that already exists.
+
+**A README for three readers.** This one file is now the manual, the design notes and the
+protocol spec at once, and it is read by three people who want different halves of it:
+someone who wants to open a document and mark it up, someone who wants the panel, the git
+reader and the invariant, and an assistant that needs the exact prompts and the exact
+commands with nothing between them. Splitting it means deciding what the front page is — the
+first of those, almost certainly — and where the other two live without the design reasoning
+being lost, since the reasoning is half of why the thing is the way it is.
 
 **Printing.** A reviewing surface people live in ends up wanting paper: the marked-up
 document, the final text, or the blackline, with the marks legible in grey rather than colour
