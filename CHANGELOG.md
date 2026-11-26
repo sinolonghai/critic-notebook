@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.3 — 2026-11-25
+
+- **The Save button is called Save everywhere.** It used to be named after the mechanism —
+  *Download* in a browser with no file picker, *Copy* inside a frame, which cannot write
+  files at all — and that read as the button being missing: twice someone looked for Save in
+  a panel, found a greyed-out *Copy*, and concluded there was no way to keep their work. Save
+  is what is wanted; which of the three ways it happens is circumstance. The tooltip says
+  which, and what comes back after pressing it says it plainly.
+
 ## 0.14.2 — 2026-11-25
 
 - **The documents drawer could be opened and not closed.** Below 880 pixels — a side panel,

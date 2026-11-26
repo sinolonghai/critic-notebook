@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.14.2** · [changelog](CHANGELOG.md)
+**0.14.3** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -367,7 +367,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.14.2' }
+page → host   { type: 'ready', protocol: 1, version: '0.14.3' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -445,10 +445,10 @@ and a closing script tag anywhere inside it has to be written with the slash esc
 above, or it ends the tag early. The page turns that escape back on the way in.
 
 What a carried document cannot do is write back. Inside a frame there is no file picker and
-no download, so **Save as** is not there at all and **Save** is **Copy** — that button is the
-only way anything leaves, and it is enabled from the start, because there is no file behind a
-carried document for it to match. To close the loop instead of copying by hand, use
-`tools/panel.mjs` on the machine the browser is on.
+no download, so **Save as** is not offered and **Save** hands you the marked-up text to copy
+over your own file. That button is the only way anything leaves, and it is enabled from the
+start, because there is no file behind a carried document for it to match. To close the loop
+instead of copying by hand, use `tools/panel.mjs` on the machine the browser is on.
 
 ### From the command line
 

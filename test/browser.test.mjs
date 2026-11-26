@@ -443,10 +443,12 @@ scenario('torn-out', async (browser) => {
     buttons: [...document.querySelectorAll('.bar button')].filter(b => b.offsetParent !== null)
       .map(b => b.textContent.trim() + (b.disabled ? '(off)' : '')),
     title: document.getElementById('btn-save').title }));
-  ok(bar.buttons.includes('Copy(off)') && !bar.buttons.some(b => /^Save/.test(b)),
-     'in a frame the page offers Copy, not Save — ' + JSON.stringify(bar.buttons.slice(-3)));
+  ok(bar.buttons.includes('Save(off)'),
+     'the button is called Save here as everywhere — ' + JSON.stringify(bar.buttons.slice(-3)));
+  ok(!bar.buttons.some(b => /Save as/.test(b)),
+     'while Save as, which needs a file picker, is not offered at all');
   ok(!/Save as/.test(bar.title),
-     'and its tooltip does not point at a Save as that is not there — ' + JSON.stringify(bar.title));
+     'and the tooltip does not point at it either — ' + JSON.stringify(bar.title));
 
   const strip = () => fr.evaluate(() => { const e = document.getElementById('risk');
     return e && !e.hidden ? e.textContent.replace(/\s+/g, ' ').trim() : null; });

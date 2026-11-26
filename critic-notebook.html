@@ -679,7 +679,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.14.2';
+var VERSION = '0.14.3';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -2660,7 +2660,7 @@ function canSave(){
    as a file where there is a Save as, and otherwise take its text out once there is any. */
 function sampleHint(){
   return (CAN_FS || CAN_DL) ? 'The tutorial is a scratch pad — use \u201cSave as\u201d to keep it'
-                            : 'Nothing to copy yet \u2014 mark the tutorial up and this takes the text out';
+                            : 'Nothing to save yet \u2014 mark the tutorial up and this takes the text out';
 }
 function paintSaveState(){
   var b = document.getElementById('btn-save'), r = docs[activeDoc];
@@ -2669,8 +2669,8 @@ function paintSaveState(){
     : !canSave() ? 'No changes to save'
     : inHost() ? 'Hand the document back (' + MOD + 'S)'
     : CAN_FS ? ((r && r.handle) ? 'Write the file (' + MOD + 'S)' : 'Write it to a file (' + MOD + 'S)')
-    : CAN_DL ? 'Download the .md (' + MOD + 'S)'
-    : 'Copy the whole document out (' + MOD + 'S) — a page in a frame cannot write files';
+    : CAN_DL ? 'Save it as a download (' + MOD + 'S)'
+    : 'Save by taking the text out (' + MOD + 'S) — a page inside a frame cannot write files';
 }
 /* Who will warn you, and whether anything is being kept. A top-level page has beforeunload
    and a host that speaks the protocol is told on every change, so the strip is for the third
@@ -4475,11 +4475,18 @@ function enterHostMode(){
   document.getElementById('btn-save').textContent = 'Save';  /* paintSaveState sets the title */
 }
 
-var SAVE_LABEL = CAN_FS ? 'Save' : CAN_DL ? 'Download' : 'Copy';
+/* The button is called Save wherever it is, because Save is what the reader wants done —
+   keep this, do not lose it — and the three ways of doing it are circumstance, not intent.
+   Naming it after the mechanism (Download in a browser without a file picker, Copy in a
+   frame, which cannot write files at all) read as the button being missing: twice someone
+   went looking for Save in a panel, found a greyed-out Copy, and concluded there was no way
+   to keep their work. The tooltip says which of the three it will be, and what comes back
+   after pressing it — a written file, a download, a panel with the text — says it plainly. */
+var SAVE_LABEL = 'Save';
 document.getElementById('btn-save').textContent = SAVE_LABEL;
 document.getElementById('btn-save').title =
-  CAN_FS ? 'Write the file (⌘S)' : CAN_DL ? 'Download the .md (⌘S)'
-         : 'This page is sandboxed and cannot write files — copy instead (' + MOD + 'S)';
+  CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Save it as a download (' + MOD + 'S)'
+         : 'Save by taking the text out (' + MOD + 'S) — a page inside a frame cannot write files';
 
 function exportText(){
   var src = doc.src, prot = protectedRanges(src), out = '', at = 0;
@@ -4941,8 +4948,9 @@ function pastePanel(){
 }
 function copyPanel(text){
   var v = openPanel({
-    title: 'Copy the Markdown',
-    body: '<p class="hint">This page runs in a sandboxed frame and cannot write files. Copy the text below over your .md.</p>' +
+    title: 'Save by taking the text out',
+    body: '<p class="hint">This page is inside a frame, which cannot write files or download ' +
+          'one. This is the whole document, marked up as it stands — copy it over your .md.</p>' +
           '<textarea id="outbox" readonly spellcheck="false"></textarea>',
     foot: '<button type="button" class="btn" data-x="close">Close</button>' +
           '<button type="button" class="btn primary" id="copyok">Copy all</button>',
