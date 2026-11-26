@@ -915,6 +915,40 @@ scenario('widths', async (browser) => {
       await ctx.close();
     }
   }
+
+  /* A drawer comes out over the corner its own button is in, so the button cannot be the
+     way back: clicking where it was has to close the drawer, and so does Esc. Where a pane
+     still has a column of its own, neither does anything to it. */
+  for(const [w, expect] of [[780, 'drawer'], [1000, 'column']]){
+    const ctx = await browser.newContext({ viewport: { width: w, height: 800 } });
+    const p = await ctx.newPage();
+    await p.goto(standalone); await sleep(700);
+    const open = () => p.evaluate(() => document.querySelector('.app').classList.contains('side-open'));
+    if(await open()) await p.click('#tog-side');
+    await sleep(250);
+    const box = await p.evaluate(() => { const r = document.getElementById('tog-side').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await p.click('#tog-side'); await sleep(350);
+    ok(await open(), w + 'px: the documents pane opens from its button');
+
+    await p.mouse.click(box.x, box.y); await sleep(350);
+    if(expect === 'drawer') ok(!(await open()), w + 'px: and a click in that same corner closes it again');
+    else ok(!(await open()), w + 'px: and the button closes it again');
+
+    if(expect === 'drawer'){
+      await p.click('#tog-side'); await sleep(300);
+      await p.mouse.click(w - 60, 500); await sleep(350);
+      ok(!(await open()), w + 'px: clicking the document closes the drawer');
+      await p.click('#tog-side'); await sleep(300);
+      await p.keyboard.press('Escape'); await sleep(350);
+      ok(!(await open()), w + 'px: Esc closes it too');
+    } else {
+      await p.click('#tog-side'); await sleep(300);
+      await p.keyboard.press('Escape'); await sleep(300);
+      ok(await open(), w + 'px: Esc leaves a pane with a column of its own alone');
+    }
+    await ctx.close();
+  }
   proc.kill();
 });
 

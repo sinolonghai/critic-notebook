@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.14.2 — 2026-11-25
+
+- **The documents drawer could be opened and not closed.** Below 880 pixels — a side panel,
+  a phone — the panes stop having columns of their own and come out over the document. The
+  documents drawer came out of the top left corner, which is where its own ◧ button is: the
+  button was underneath it, the click never reached it, and there was no way back. The
+  outline drawer only looked well-behaved because it comes out on the other side.
+- A drawer now starts where the document starts, so the bar it was opened from and the
+  status line stay put and stay usable, and the button that opened it closes it again. The
+  rest of the page dims while one is open, and clicking it — or Esc — closes the drawer.
+  A pane that still has a column of its own is left alone by both.
+- The `widths` scenario now opens the documents pane and closes it again three ways at panel
+  width, and checks that neither a click in the document nor Esc disturbs a pane with a
+  column of its own.
+
 ## 0.14.1 — 2026-11-25
 
 - **Inside a frame, the way out was greyed out.** There is no file picker and no download
