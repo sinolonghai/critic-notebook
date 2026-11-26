@@ -791,6 +791,18 @@ than making you choose a side. Needs a file handle, so: Chrome, or the panel.
 sized for a phrase. The edit form beside it already opens wide with a textarea that grows —
 the comment form should be the same box, with Enter to add and Shift+Enter for a line break.
 
+**Copy should put text on the clipboard, not the page.** Copying from the document and
+pasting into another editor brings the page's own styling with it — in dark mode that is
+near-white type, which lands on a white page as barely-readable grey; in light mode anything
+secondary (the lead line, a quoted mark row) is grey to begin with and stays grey. The page
+already resolves a selection to clean markdown and puts it on the clipboard as `text/plain`,
+but only when the selection sits inside a block of the document and the offsets resolve;
+every other copy falls through to the browser, which writes a second `text/html` flavour full
+of inline computed colours and fonts, and a rich editor prefers that one. The fix is to take
+every copy that starts inside the app, put the resolved markdown on as plain text, and write
+no HTML flavour at all — with the selection's own text as the fallback where the offsets do
+not resolve. Nothing that leaves this tool should carry its colours.
+
 **Say what the check mark on a comment does.** A change offers ✓ and ✕, accept and reject. A
 comment offers only ✓, labelled *Resolve*, and resolving is deletion: CriticMarkup has no
 resolved state, so the mark leaves the file. Word can show both because it keeps resolved
