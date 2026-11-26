@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.15.0 — 2026-11-26
+
+- **A frame is asked whether it can save, instead of being assumed unable to.** The page used
+  to settle this by position — `window.self === window.top` — and send every reviewer in a
+  panel off to copy text by hand. Measured, a same-origin `http(s)` frame opens the file
+  dialog quite happily, with or without a sandbox that keeps `allow-same-origin`; only a
+  sandbox without it, or a frame of a `file://` page, refuses with `SecurityError`. Two of the
+  four can save, and where the page is sitting cannot tell them apart.
+- So the pickers are offered wherever they exist, the first refusal is believed, **Save as**
+  and **Open folder** withdraw when it arrives, and the labels are redrawn to say what was
+  just learned. `AbortError` — a dialog closed, or one the browser had nowhere to show — is
+  not a refusal and costs nothing.
+- Where the picker is refused, Save still opens the whole document for copying, and that panel
+  now carries a **Download** link for the reader to click. Downloads stay positional on
+  purpose: a frame without `allow-downloads` throws a script-driven one away in silence, and a
+  save that quietly does nothing is worse than one that hands you the text.
+- The `torn-out` scenario now presses Save inside a frame and checks the whole sequence: both
+  pickers offered beforehand, both withdrawn after the refusal, and the document offered for
+  copying with a download beside it.
+
 ## 0.14.3 — 2026-11-25
 
 - **The Save button is called Save everywhere.** It used to be named after the mechanism —

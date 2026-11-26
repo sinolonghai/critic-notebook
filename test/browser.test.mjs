@@ -445,10 +445,9 @@ scenario('torn-out', async (browser) => {
     title: document.getElementById('btn-save').title }));
   ok(bar.buttons.includes('Save(off)'),
      'the button is called Save here as everywhere — ' + JSON.stringify(bar.buttons.slice(-3)));
-  ok(!bar.buttons.some(b => /Save as/.test(b)),
-     'while Save as, which needs a file picker, is not offered at all');
-  ok(!/Save as/.test(bar.title),
-     'and the tooltip does not point at it either — ' + JSON.stringify(bar.title));
+  ok(bar.buttons.some(b => /Save as/.test(b)),
+     'and Save as is offered until a picker actually refuses, since whether one works here ' +
+     'cannot be told from inside the frame');
 
   const strip = () => fr.evaluate(() => { const e = document.getElementById('risk');
     return e && !e.hidden ? e.textContent.replace(/\s+/g, ' ').trim() : null; });
@@ -483,6 +482,24 @@ scenario('torn-out', async (browser) => {
     dirty: !document.getElementById('btn-save').disabled }));
   ok(back.text === 'marks', 'the marks are there again');
   ok(back.dirty, 'and it is still unsaved, as it was');
+
+  /* Saving from a frame: the pickers are offered until one refuses, and the refusal is
+     believed. Before 0.15.0 the page judged this by position and never asked — which took
+     the file dialog away from panels that would have allowed it. */
+  const caps = () => fr.evaluate(() => ({
+    saveAs: !document.getElementById('btn-saveas').hidden,
+    folder: !document.getElementById('btn-open').hidden,
+    panel: !!document.querySelector('.veil'),
+    download: !!document.getElementById('dlok') }));
+  const before = await caps();
+  ok(before.saveAs && before.folder, 'the pickers are offered in a frame until one refuses');
+  await fr.click('#btn-save'); await sleep(900);
+  const after = await caps();
+  ok(!after.saveAs && !after.folder, 'a refusal is believed once and the pickers withdrawn');
+  ok(after.panel && after.download,
+     'and the save falls back to the text, with a download the reader can try');
+  await fr.evaluate(() => document.querySelector('.veil [data-x="close"]').click()); await sleep(300);
+
 
   ok(!errs.length, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();

@@ -1,6 +1,6 @@
 # critic-notebook
 
-**0.14.3** · [changelog](CHANGELOG.md)
+**0.15.0** · [changelog](CHANGELOG.md)
 
 **A Markdown editor with tracked changes.** Review Markdown the way you'd review a document —
 but keep the revisions in the file.
@@ -367,7 +367,7 @@ will not take a string — so the host hands over the text instead and takes it 
 way. Four messages, no credentials, nothing touching a filesystem:
 
 ```text
-page → host   { type: 'ready', protocol: 1, version: '0.14.3' }
+page → host   { type: 'ready', protocol: 1, version: '0.15.0' }
 host → page   { type: 'open',  name: 'A.md', text: '…' }
 page → host   { type: 'save',  name: 'A.md', text: '…' }
 page → host   { type: 'dirty', dirty: true, open: 3 }
@@ -405,6 +405,33 @@ page ignores any message that did not come from its own parent.
 fire reliably for an iframe a host tears down, so the page has to be able to say it is holding
 decisions that would be lost. `dirty` is about unsaved edits; `open` counts suggestions nobody
 has decided on yet, which can be above zero on a document that is perfectly saved.
+
+### What a frame is allowed to do
+
+A page drawn inside another page is not simply forbidden to write files, which is what this
+tool assumed until 0.15.0 — it asked `window.self === window.top` and treated every frame as
+hopeless. Calling the file picker in one tells a different story:
+
+| where the page is | `showSaveFilePicker()` |
+| --- | --- |
+| its own tab | opens the dialog |
+| a same-origin `http(s)` frame, no sandbox | opens the dialog |
+| the same, sandboxed with `allow-same-origin` | opens the dialog |
+| sandboxed without `allow-same-origin` | `SecurityError` — sandboxed documents may not |
+| a frame of a `file://` page | `SecurityError` — cross-origin sub frames may not |
+
+Two of those can save and position cannot tell them apart, so the page offers the pickers
+wherever they exist, believes the first refusal, withdraws **Save as** and **Open folder**
+when it comes, and redraws its labels to match what it has just learned. `AbortError` is not
+a refusal — that is the dialog being closed, by a person or by a browser with nowhere to show
+it — and it costs nothing.
+
+Downloads stay a matter of position, for a different reason: a frame without `allow-downloads`
+drops a script-driven download without a word, and a save that silently does nothing is worse
+than one that hands you the text. So where the picker is refused, Save opens the document for
+copying and puts a **Download** link in that panel for the reader to click — a click of their
+own being the version a sandbox is likeliest to honour, and the text being right there if it
+is not.
 
 A page inside a panel does not get the keyboard until it is clicked. Keystrokes belong to
 whichever frame has focus, so `⌘S` before the first click lands in the app around the page —
@@ -454,9 +481,11 @@ above, or it ends the tag early. The page turns that escape back on the way in.
 Where it is opened decides what Save can do, and the file is the same either way. Opened as
 its own browser tab — double-clicked in a file manager — it is an ordinary page: **Save** puts
 up a file dialog and writes a real `.md`. Shown inside something else, in a chat panel or a
-canvas, it is in a frame, where there is no file picker and no download at all: **Save as** is
-not offered and **Save** hands you the marked-up text to copy over your own file. So if you
-want a file out of a carried document, open it rather than view it. That button is the only way anything leaves, and it is enabled from the
+canvas, it depends on that frame, and the page finds out by asking (see
+[What a frame is allowed to do](#what-a-frame-is-allowed-to-do) below): some frames allow the
+file dialog, and the ones that do not get **Save** as the whole document handed over to copy,
+with a download to try. If you want a file out of a carried document and the panel will not
+give you one, open it rather than view it. That button is the only way anything leaves, and it is enabled from the
 start, because there is no file behind a carried document for it to match. To close the loop
 instead of copying by hand, use `tools/panel.mjs` on the machine the browser is on.
 
@@ -842,21 +871,6 @@ than making you choose a side. Needs a file handle, so: Chrome, or the panel.
 **A comment box big enough to write a comment in.** It is a one-line `<input>` in a popover
 sized for a phrase. The edit form beside it already opens wide with a textarea that grows —
 the comment form should be the same box, with Enter to add and Shift+Enter for a line break.
-
-**Ask whether a frame can save, rather than assuming it cannot.** The page decides what Save
-can do by *position* — `window.self === window.top` — and treats every frame as unable to
-write a file. Measured, that is wrong: `showSaveFilePicker` is present inside frames too,
-sandboxed ones included, and a blob URL can always be made. What varies is whether the call
-is *allowed*: a cross-origin frame has the File System Access API denied by permissions
-policy, a frame without `allow-downloads` has its downloads blocked, and a frame that is
-neither may be able to do both. So a host that would have let the page write a file never
-gets asked, and the reviewer is sent to copy text by hand for no reason — which is the
-likeliest explanation for the same page saving properly in one assistant's panel and not in
-another's. The fix is to try rather than to presume: call the picker and fall back to the
-copy panel when it throws, and offer a download link inside that panel, where a click of the
-reader's own is the best chance a sandbox will allow and the text is sitting there if it is
-not. Position stays the right test for one thing only — `Save as`, which has nowhere to go
-without a picker.
 
 **Copy should put text on the clipboard, not the page.** Copying from the document and
 pasting into another editor brings the page's own styling with it — in dark mode that is

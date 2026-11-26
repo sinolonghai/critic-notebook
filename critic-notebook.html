@@ -97,6 +97,8 @@ button,input,textarea{font:inherit;color:inherit}
 .navjump .at{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);
   min-width:2.6rem;text-align:center;font-variant-numeric:tabular-nums}
 .btn{border:1px solid var(--rule-strong);background:var(--surface);padding:5px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+/* a link that has to sit in a row of buttons and look like one */
+a.btn{display:inline-block;color:inherit;text-decoration:none;line-height:1.55}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
 .btn:disabled{opacity:.42;cursor:default}
 .btn:disabled:hover{border-color:var(--rule-strong);color:inherit}
@@ -679,7 +681,7 @@ button,input,textarea{font:inherit;color:inherit}
 (function(){
 'use strict';
 
-var VERSION = '0.14.3';
+var VERSION = '0.15.0';
 var APPLE = (function(){
   var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   return /mac|iphone|ipad|ipod/i.test(p);
@@ -2670,7 +2672,8 @@ function paintSaveState(){
     : inHost() ? 'Hand the document back (' + MOD + 'S)'
     : CAN_FS ? ((r && r.handle) ? 'Write the file (' + MOD + 'S)' : 'Write it to a file (' + MOD + 'S)')
     : CAN_DL ? 'Save it as a download (' + MOD + 'S)'
-    : 'Save by taking the text out (' + MOD + 'S) — a page inside a frame cannot write files';
+    : 'Save by taking the text out (' + MOD + 'S) — this page is not allowed to write a file ' +
+      'where it is running';
 }
 /* Who will warn you, and whether anything is being kept. A top-level page has beforeunload
    and a host that speaks the protocol is told on every change, so the strip is for the third
@@ -3054,7 +3057,9 @@ function pickFolder(anchor){
   return window.showDirectoryPicker(opts).then(function(h){
     return useFolder(h);
   }).catch(function(e){
-    if(!e || e.name !== 'AbortError') toast('Could not open that folder');
+    if(!e || e.name === 'AbortError') return;
+    if(deniedHere(e)) toast('This page is not allowed to open folders here \u2014 open single files instead');
+    else toast('Could not open that folder');
   });
 }
 
@@ -4397,8 +4402,23 @@ function guardDirty(next){
 
 /* ===================== save / open ===================== */
 var topLevel = (function(){ try{ return window.self === window.top; }catch(e){ return false; } })();
-var CAN_FS = topLevel && typeof window.showSaveFilePicker === 'function';
-var CAN_DIR = topLevel && typeof window.showDirectoryPicker === 'function';
+/* What the page can do is a question to ask, not one to answer from where the page happens
+   to be sitting. These used to require `topLevel`, on the assumption that a frame can never
+   write a file — and that assumption sent reviewers in perfectly capable side panels off to
+   copy text by hand. Measured, calling showSaveFilePicker inside a frame gives:
+
+     a same-origin http(s) frame, no sandbox          the dialog opens — allowed
+     the same, sandboxed with allow-same-origin       the dialog opens — allowed
+     sandboxed without allow-same-origin             SecurityError, "Sandboxed documents…"
+     a frame of a file:// page                       SecurityError, "Cross origin sub frames…"
+
+   So two of the four can save, and position cannot tell them apart. The pickers are offered
+   wherever they exist, the first refusal is believed, and the labels are redrawn to match
+   what was just learned. A download is the one that stays positional: a frame without
+   allow-downloads drops it on the floor without a word, and a save that silently does
+   nothing is worse than one that hands you the text. */
+var CAN_FS = typeof window.showSaveFilePicker === 'function';
+var CAN_DIR = typeof window.showDirectoryPicker === 'function';
 /* A blob download works from any origin the browser trusts, not just a local file — this
    used to name localhost explicitly, which left a Firefox or Safari visitor to a hosted copy
    with Copy as the only way to get their edits out. */
@@ -4484,9 +4504,8 @@ function enterHostMode(){
    after pressing it — a written file, a download, a panel with the text — says it plainly. */
 var SAVE_LABEL = 'Save';
 document.getElementById('btn-save').textContent = SAVE_LABEL;
-document.getElementById('btn-save').title =
-  CAN_FS ? 'Write the file (' + MOD + 'S)' : CAN_DL ? 'Save it as a download (' + MOD + 'S)'
-         : 'Save by taking the text out (' + MOD + 'S) — a page inside a frame cannot write files';
+/* the tooltip is set by paintCapabilities, which can be called again when a picker turns
+   out not to be permitted here */
 
 function exportText(){
   var src = doc.src, prot = protectedRanges(src), out = '', at = 0;
@@ -4632,6 +4651,27 @@ function offerFolderFor(h, homeName){
    picker in the page not going through pickerOpts, so it opened wherever the browser last
    was — Documents — and a blackline saved from a folder landed beside nothing it belongs to,
    while the page was holding a handle on the folder it came from the whole time. */
+/* A picker that exists but is not permitted here throws SecurityError (NotAllowedError
+   where there was no gesture to spend). Believe it once, stop offering what cannot work, and
+   repaint so every label and tooltip tells the truth from then on. AbortError is not this:
+   it is the reader closing the dialog, or a dialog that never appeared, and it must not cost
+   them the pickers for the rest of the session. */
+var pickerDenied = false;
+function deniedHere(e){
+  if(!e || (e.name !== 'SecurityError' && e.name !== 'NotAllowedError')) return false;
+  if(!pickerDenied){
+    pickerDenied = true;
+    CAN_FS = false; CAN_DIR = false;
+    paintCapabilities();
+    paintStatus(); paintDocList(); paintStart();
+  }
+  return true;
+}
+function paintCapabilities(){
+  document.getElementById('btn-open').hidden = !CAN_DIR;
+    saveAsBtn.hidden = !CAN_FS;
+  paintSaveState();          /* the tooltip lives there, and is redrawn on every repaint */
+}
 function pickAndSave(text){
   var opts = pickerOpts({ suggestedName: suggestName(), types: MD_TYPES });
   return window.showSaveFilePicker(opts)
@@ -4653,6 +4693,7 @@ function pickAndSave(text){
     })
     .catch(function(e){
       if(e && e.name === 'AbortError') return false;
+      deniedHere(e);
       if(CAN_DL){ downloadText(text); return true; }
       copyPanel(text);
       return false;
@@ -4703,6 +4744,7 @@ function openSingleFile(){
         return h.getFile().then(function(f){ return f.text(); }).then(function(t){ return adoptSingle(h, t); });
       }).catch(function(e){
         if(e && e.name === 'AbortError') return;
+        deniedHere(e);                      /* the old file input still works in a frame */
         document.getElementById('file').click();
       });
       return;
@@ -4714,7 +4756,6 @@ document.getElementById('btn-open').addEventListener('click', function(){
   flushEditor();
   guardDirty(function(){ pickFolder(); });
 });
-document.getElementById('btn-open').hidden = !CAN_DIR;
 document.getElementById('btn-open').title = 'Pick a folder; its markdown files are listed on the left';
 document.getElementById('btn-openfile').addEventListener('click', openSingleFile);
 document.getElementById('btn-openfile').title = 'Open one file on its own';
@@ -4757,8 +4798,8 @@ document.getElementById('bl-keep').addEventListener('click', function(){
 });
 document.getElementById('btn-save').addEventListener('click', function(){ saveFile(); });
 var saveAsBtn = document.getElementById('btn-saveas');
-saveAsBtn.hidden = !CAN_FS;
 saveAsBtn.title = 'Write this document to a new file';
+paintCapabilities();
 saveAsBtn.addEventListener('click', function(){ saveAs(); });
 document.getElementById('file').addEventListener('change', function(ev){
   var list = Array.prototype.slice.call(ev.target.files || []);
@@ -4947,16 +4988,35 @@ function pastePanel(){
   });
 }
 function copyPanel(text){
+  /* The download is offered as a link for the reader to click rather than something the page
+     fires off: a frame without allow-downloads throws a script-driven download away in
+     silence, while a click of the reader's own is the version a sandbox is likeliest to
+     honour. If it is refused anyway, nothing is lost — the text is sitting right there. */
+  var url = null;
+  try{ url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' })); }
+  catch(e){ url = null; }
   var v = openPanel({
     title: 'Save by taking the text out',
-    body: '<p class="hint">This page is inside a frame, which cannot write files or download ' +
-          'one. This is the whole document, marked up as it stands — copy it over your .md.</p>' +
+    body: '<p class="hint">This page is not allowed to write a file where it is running. ' +
+          'This is the whole document, marked up as it stands \u2014 copy it over your .md, ' +
+          (url ? 'or try the download; some panels allow it and some drop it without a word.'
+               : 'and keep it somewhere of your own.') + '</p>' +
           '<textarea id="outbox" readonly spellcheck="false"></textarea>',
     foot: '<button type="button" class="btn" data-x="close">Close</button>' +
+          (url ? '<a class="btn" id="dlok" download="' + esc(suggestName()) + '" href="' +
+                 esc(url) + '">Download</a>' : '') +
           '<button type="button" class="btn primary" id="copyok">Copy all</button>',
     after: function(el){ el.querySelector('#outbox').value = text; }
   });
-  v.querySelector('[data-x="close"]').addEventListener('click', function(){ v.remove(); });
+  function done(){
+    if(url) setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+    v.remove();
+  }
+  if(url) v.querySelector('#dlok').addEventListener('click', function(){
+    savedSrc = doc.src; syncRecord(); paintStatus(); paintDocList();
+    toast('If nothing arrives, this panel is not allowed to download — copy the text instead');
+  });
+  v.querySelector('[data-x="close"]').addEventListener('click', done);
   v.querySelector('#copyok').addEventListener('click', function(){
     var box = v.querySelector('#outbox');
     function manual(){
